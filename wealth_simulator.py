@@ -12,6 +12,81 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 import plotly.io as pio
+import streamlit as st
+from auth import initialize_session_state, show_login_page, show_user_header, check_simulation_limit, increment_simulation_count, increment_export_count
+from data_tracking import save_simulation
+from database import init_db
+from landing_page import show_landing_page
+
+
+# Initialize database on first run
+try:
+    init_db()
+except:
+    pass  # Database already exists
+
+# Initialize session state
+initialize_session_state()
+
+# # Check authentication - wrap your entire app
+# if not st.session_state.get('authenticated', False):
+#     # Show login/register page
+#     show_login_page()
+#     st.stop()  # Don't run the rest of the app
+
+if not st.session_state.get('authenticated', False):
+    show_landing_page()  # Instead of show_login_page()
+    st.stop()
+    
+# Show user header
+show_user_header()
+
+if st.session_state.authenticated:
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📅 Simulation Timeline")
+    
+    # Get defaults from user profile
+    default_current_age = st.session_state.current_age
+    default_retirement_age = st.session_state.target_retirement_age
+    
+    # Allow user to override for scenario planning
+    col1, col2 = st.sidebar.columns(2)
+    
+    with col1:
+        starting_age = st.number_input(
+            "Starting Age",
+            min_value=18,
+            max_value=100,
+            value=default_current_age,
+            step=1,
+            help="Age to start simulation from (defaults to your current age)"
+        )
+    
+    with col2:
+        retirement_age = st.number_input(
+            "Retirement Age",
+            min_value=starting_age + 1,  # Must be at least 1 year after starting age
+            max_value=100,
+            value=default_retirement_age,
+            step=1,
+            help="Target retirement age"
+        )
+    
+    # Calculate simulation years
+    simulation_years = retirement_age - starting_age
+    
+    # Show calculation
+    st.sidebar.info(f"📊 Simulating **{simulation_years} years** (Age {starting_age} → {retirement_age})")
+    
+    # Validation
+    if simulation_years <= 0:
+        st.sidebar.error("⚠️ Retirement age must be greater than starting age")
+        st.stop()
+    
+    if simulation_years > 60:
+        st.sidebar.warning(f"⚠️ Long simulation: {simulation_years} years")
+    
+    st.sidebar.markdown("---")
 
 # Set page config
 st.set_page_config(page_title="Wealth Path Simulator", layout="wide")
@@ -933,21 +1008,73 @@ def run_monte_carlo(initial_liquid_wealth, initial_property_value, initial_mortg
     }
 
 
+# Check usage limits
+can_simulate, remaining, message = check_simulation_limit(st.session_state.user_id, limit=99)
+
+if not can_simulate:
+    st.sidebar.error(message)
+else:
+    st.sidebar.success(message)
+
 # Run simulation button
-if st.sidebar.button("Run Simulation", type="primary"):
-    with st.spinner("Running Monte Carlo simulation..."):
+if st.sidebar.button("Run Simulation", type="primary", disabled=not can_simulate):
+    with st.spinner(f"Running {simulation_years}-year simulation..."):
         results = run_monte_carlo(
-            initial_liquid_wealth, initial_property_value, initial_mortgage,
-            gross_annual_income, effective_tax_rate, pension_contribution_rate,
-            monthly_expenses, monthly_mortgage_payment,
-            property_appreciation, mortgage_interest_rate,
-            expected_return, return_volatility, expected_inflation, inflation_volatility,
-            salary_inflation, years, n_simulations, events, random_seed
+            initial_liquid_wealth=initial_liquid_wealth,
+            initial_property_value=initial_property_value,
+            initial_mortgage=initial_mortgage,
+            gross_annual_income=gross_annual_income,
+            effective_tax_rate=effective_tax_rate,
+            pension_contribution_rate=pension_contribution_rate,
+            monthly_expenses=monthly_expenses,
+            monthly_mortgage_payment=calculated_payment,
+            property_appreciation=property_appreciation,
+            mortgage_interest_rate=mortgage_interest_rate,
+            expected_return=expected_return,
+            return_volatility=return_volatility,
+            expected_inflation=expected_inflation,
+            inflation_volatility=inflation_volatility,
+            salary_inflation=salary_inflation,
+            years=simulation_years,  # ✅ Dynamic based on age inputs
+            n_simulations=n_simulations,
+            events=events,
+            random_seed=random_seed
         )
         
-        # Store in session state
         st.session_state['results'] = results
         st.session_state['sim_complete'] = True
+        st.session_state['starting_age'] = starting_age
+        st.session_state['retirement_age'] = retirement_age
+        st.session_state['simulation_years'] = simulation_years
+        
+        # Track usage
+        increment_simulation_count(st.session_state.user_id)
+        
+        # Save simulation
+        simulation_params = {
+            'name': f"Simulation {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+            'currency': selected_currency,
+            'initial_liquid_wealth': initial_liquid_wealth,
+            'initial_property_value': initial_property_value,
+            'initial_mortgage': initial_mortgage,
+            'gross_annual_income': gross_annual_income,
+            'monthly_expenses': monthly_expenses,
+            'events': events,
+            'expected_return': expected_return,
+            'expected_inflation': expected_inflation,
+            'starting_age': starting_age,  # ✅ Save age info
+            'retirement_age': retirement_age,
+            'simulation_years': simulation_years,
+        }
+        
+        save_simulation(st.session_state.user_id, simulation_params, results)
+        
+        st.success(f"✅ Simulation complete! Projected from age {starting_age} to {retirement_age}.")
+
+
+# ==============================================================================
+# DISPLAY RESULTS SECTION:
+# ==============================================================================
 
 # Display results if simulation has been run
 if st.session_state.get('sim_complete', False):
@@ -1080,19 +1207,43 @@ if st.session_state.get('sim_complete', False):
             annotation_position="top"
         )
     
+
+if st.session_state.get('sim_complete', False):
+    results = st.session_state['results']
+    starting_age = st.session_state.get('starting_age', st.session_state.current_age)
+    retirement_age = st.session_state.get('retirement_age', st.session_state.target_retirement_age)
+    simulation_years = st.session_state.get('simulation_years', 30)
+    
+    # Update main chart title
     fig.update_layout(
-        title=f"{y_label} Trajectory over 30 Years ({'Real' if show_real else 'Nominal'} Values)",
-        xaxis_title="Year",
-        yaxis_title=f"{y_label} ({'Real' if show_real else 'Nominal'} {currency_symbol})",
+        title=f"Net Worth Trajectory: Age {starting_age} to {retirement_age} ({simulation_years} years)",
+        xaxis_title="Years from Now",
+        yaxis_title=f"Net Worth ({currency_symbol})",
         hovermode='x unified',
         height=600,
         showlegend=True
     )
     
-    # Format y-axis as currency with selected symbol
-    fig.update_yaxes(tickprefix=currency_symbol, tickformat=",.0f")
+    # ❌ REMOVE THIS - It causes the error:
+    # fig.update_xaxes(secondary_y=False, title_text="Years from Now")
+    
+    # ✅ Instead, just set the x-axis title normally (already done above)
     
     st.plotly_chart(fig, use_container_width=True)
+
+    # fig.update_layout(
+    #     title=f"{y_label} Trajectory over 30 Years ({'Real' if show_real else 'Nominal'} Values)",
+    #     xaxis_title="Year",
+    #     yaxis_title=f"{y_label} ({'Real' if show_real else 'Nominal'} {currency_symbol})",
+    #     hovermode='x unified',
+    #     height=600,
+    #     showlegend=True
+    # )
+    
+    # # Format y-axis as currency with selected symbol
+    # fig.update_yaxes(tickprefix=currency_symbol, tickformat=",.0f")
+    
+    # st.plotly_chart(fig, use_container_width=True)
     
     # Key metrics
     st.subheader("Key Statistics")
@@ -1181,9 +1332,9 @@ if st.session_state.get('sim_complete', False):
     fig_composition.add_hline(y=0, line_dash="dot", line_color="gray", opacity=0.5)
     
     fig_composition.update_layout(
-        title=f"Median Wealth Components ({'Real' if show_real else 'Nominal'} Values)",
-        xaxis_title="Year",
-        yaxis_title=f"Value ({'Real' if show_real else 'Nominal'} {currency_symbol})",
+        title=f"Wealth Composition: Age {starting_age} to {retirement_age}",
+        xaxis_title="Years from Now",
+        yaxis_title=f"Value ({currency_symbol})",
         hovermode='x unified',
         height=400,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
@@ -1198,6 +1349,7 @@ if st.session_state.get('sim_complete', False):
     st.subheader("📥 Export Results")
     col_exp1, col_exp2, col_exp3 = st.columns([1, 1, 3])
     
+
     with col_exp1:
         # Excel export
         excel_file = export_to_excel(
@@ -1215,6 +1367,9 @@ if st.session_state.get('sim_complete', False):
             use_container_width=True,
             help="Download detailed results as Excel spreadsheet"
         )
+        # Track export usage
+        increment_export_count(st.session_state.user_id)
+
     
     with col_exp2:
         # PDF export - pass both figures
@@ -1232,7 +1387,9 @@ if st.session_state.get('sim_complete', False):
             use_container_width=True,
             help="Download formatted PDF report with charts"
         )
-    
+        # Track export usage
+        increment_export_count(st.session_state.user_id)
+
     # Add cash flow summary
     st.subheader("Annual Cash Flow Available for Savings")
     
@@ -1400,22 +1557,33 @@ if st.session_state.get('sim_complete', False):
     
     st.plotly_chart(fig_dist, use_container_width=True)
     
-    # Detailed percentile table
-    st.subheader("Detailed Percentile Breakdown")
-    
+    # ==============================================================================
+    # STEP 4: Add age column to milestone tables
+    # ==============================================================================
+
+    # In your percentile breakdown section:
+    st.subheader(f"Net Worth by Age Milestones")
+
+    milestone_years = [5, 10, 15, 20, 25, 30]
     milestone_data = []
+
     for year in milestone_years:
-        year_wealth = paths_to_plot[:, year]
-        milestone_data.append({
-            'Year': year,
-            '10th': format_currency(np.percentile(year_wealth, 10), selected_currency),
-            '25th': format_currency(np.percentile(year_wealth, 25), selected_currency),
-            '50th': format_currency(np.percentile(year_wealth, 50), selected_currency),
-            '75th': format_currency(np.percentile(year_wealth, 75), selected_currency),
-            '90th': format_currency(np.percentile(year_wealth, 90), selected_currency),
-        })
-    
-    st.dataframe(pd.DataFrame(milestone_data), use_container_width=True, hide_index=True)
+        if year <= simulation_years:  # Only show milestones within simulation range
+            age_at_milestone = starting_age + year
+            year_wealth = results['net_worth'][:, year]
+            
+            milestone_data.append({
+                'Year': year,
+                'Age': age_at_milestone,  # ✅ Add age column
+                '10th': format_currency(np.percentile(year_wealth, 10), selected_currency),
+                '25th': format_currency(np.percentile(year_wealth, 25), selected_currency),
+                '50th': format_currency(np.percentile(year_wealth, 50), selected_currency),
+                '75th': format_currency(np.percentile(year_wealth, 75), selected_currency),
+                '90th': format_currency(np.percentile(year_wealth, 90), selected_currency),
+            })
+
+    milestone_df = pd.DataFrame(milestone_data)
+    st.dataframe(milestone_df, use_container_width=True, hide_index=True)
 
 else:
     st.info("👈 Set your parameters in the sidebar and click 'Run Simulation' to begin")

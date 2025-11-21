@@ -1,0 +1,338 @@
+"""
+Professional Landing Page for FinSim
+Replace your show_login_page() function with this enhanced version
+"""
+
+import streamlit as st
+from auth import initialize_session_state, login_user, register_user, logout
+
+
+def show_landing_page():
+    """
+    Professional landing page with login
+    Combines marketing + authentication
+    """
+    initialize_session_state()
+    
+    # Custom CSS for landing page
+    st.markdown("""
+        <style>
+        /* Main container */
+        .main {
+            padding: 0rem 1rem;
+        }
+        
+        /* Hero section */
+        .hero {
+            text-align: center;
+            padding: 3rem 1rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+            margin-bottom: 2rem;
+        }
+        
+        .hero h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            font-weight: 700;
+        }
+        
+        .hero p {
+            font-size: 1.3rem;
+            margin-bottom: 2rem;
+            opacity: 0.95;
+        }
+        
+        /* Feature boxes */
+        .feature-box {
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border-left: 4px solid #667eea;
+        }
+        
+        .feature-box h3 {
+            color: #667eea;
+            margin-bottom: 0.5rem;
+        }
+        
+        /* Stats */
+        .stat-container {
+            display: flex;
+            justify-content: space-around;
+            margin: 2rem 0;
+            flex-wrap: wrap;
+        }
+        
+        .stat-box {
+            text-align: center;
+            padding: 1rem;
+            min-width: 150px;
+        }
+        
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .stat-label {
+            color: #666;
+            font-size: 0.9rem;
+        }
+        
+        /* CTA buttons */
+        .stButton > button {
+            width: 100%;
+            border-radius: 8px;
+            padding: 0.75rem 1.5rem;
+            font-weight: 600;
+        }
+        
+        /* Testimonial */
+        .testimonial {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+            margin: 1rem 0;
+            font-style: italic;
+        }
+        
+        .testimonial-author {
+            font-weight: bold;
+            color: #667eea;
+            margin-top: 0.5rem;
+            font-style: normal;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    
+    # Hero Section
+    st.markdown("""
+        <div class="hero">
+            <h1>💰 FinSim</h1>
+            <p>Plan Your Financial Future with Confidence</p>
+            <p style="font-size: 1rem; opacity: 0.9;">
+                Monte Carlo simulations • Retirement planning • Real estate modeling • 100% Free
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Social Proof Stats
+    st.markdown("""
+        <div class="stat-container">
+            <div class="stat-box">
+                <div class="stat-number">10K+</div>
+                <div class="stat-label">Simulations Run</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-number">5</div>
+                <div class="stat-label">Free per Month</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-number">30+</div>
+                <div class="stat-label">Year Projections</div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Login/Register Section
+    st.markdown("---")
+    
+    # Two column layout for login and features
+    col_left, col_right = st.columns([1, 1])
+    
+    with col_left:
+        st.markdown("### 🔐 Get Started")
+        
+        tab1, tab2 = st.tabs(["Login", "Create Account"])
+        
+        with tab1:
+            with st.form("login_form"):
+                username = st.text_input("Username", key="login_username")
+                password = st.text_input("Password", type="password", key="login_password")
+                submit = st.form_submit_button("Login", type="primary", use_container_width=True)
+                
+                if submit:
+                    if not username or not password:
+                        st.error("Please fill in all fields")
+                    else:
+                        user_data, message = login_user(username, password)
+                        
+                        if user_data:
+                            st.session_state.authenticated = True
+                            st.session_state.user_id = user_data['id']
+                            st.session_state.username = user_data['username']
+                            st.session_state.user_email = user_data['email']
+                            st.session_state.current_age = user_data['current_age']
+                            st.session_state.target_retirement_age = user_data['target_retirement_age']
+                            st.success(message)
+                            st.rerun()
+                        else:
+                            st.error(message)
+            
+            # Demo account info
+            st.info("💡 **Try it out:**\n\nUsername: `testuser`\n\nPassword: `password123`")
+        
+        with tab2:
+            with st.form("register_form"):
+                st.markdown("**Account Information**")
+                new_username = st.text_input("Username*", key="reg_username")
+                new_email = st.text_input("Email*", key="reg_email")
+                new_password = st.text_input("Password*", type="password", key="reg_password")
+                confirm_password = st.text_input("Confirm Password*", type="password", key="reg_confirm")
+                
+                st.markdown("**Your Planning Profile**")
+                col1, col2 = st.columns(2)
+                with col1:
+                    current_age = st.number_input("Current Age*", min_value=18, max_value=100, value=30, key="reg_age")
+                with col2:
+                    target_retirement_age = st.number_input("Retirement Age*", min_value=50, max_value=100, value=65, key="reg_retire")
+                
+                country = st.text_input("Country (Optional)", key="reg_country")
+                
+                st.markdown("---")
+                
+                consent = st.checkbox(
+                    "I agree to share anonymized data for research (helps keep FinSim free)",
+                    key="consent"
+                )
+                
+                terms = st.checkbox("I agree to Terms of Service and Privacy Policy", key="terms")
+                
+                submit_register = st.form_submit_button("Create Free Account", type="primary", use_container_width=True)
+                
+                if submit_register:
+                    if not new_username or not new_email or not new_password:
+                        st.error("Please fill in all required fields")
+                    elif new_password != confirm_password:
+                        st.error("Passwords do not match")
+                    elif len(new_password) < 8:
+                        st.error("Password must be at least 8 characters")
+                    elif not consent:
+                        st.error("Please agree to data sharing policy")
+                    elif not terms:
+                        st.error("Please agree to Terms of Service")
+                    else:
+                        success, message = register_user(
+                            new_username, new_email, new_password,
+                            current_age, target_retirement_age,
+                            country if country else None
+                        )
+                        
+                        if success:
+                            st.success(message)
+                            st.info("👉 Switch to Login tab to sign in")
+                        else:
+                            st.error(message)
+    
+    with col_right:
+        st.markdown("### ✨ Key Features")
+        
+        st.markdown("""
+        <div class="feature-box">
+            <h3>🎲 Monte Carlo Simulation</h3>
+            <p>Run thousands of scenarios to understand the range of possible outcomes for your financial future.</p>
+        </div>
+        
+        <div class="feature-box">
+            <h3>🏠 Real Estate Planning</h3>
+            <p>Model property purchases, sales, mortgages, and rental income in your projections.</p>
+        </div>
+        
+        <div class="feature-box">
+            <h3>👨‍👩‍👧 Life Events</h3>
+            <p>Plan for children, career changes, international moves, and major expenses.</p>
+        </div>
+        
+        <div class="feature-box">
+            <h3>💱 Multi-Currency</h3>
+            <p>Support for 15+ currencies including USD, CAD, EUR, GBP, and more.</p>
+        </div>
+        
+        <div class="feature-box">
+            <h3>📊 Export Results</h3>
+            <p>Download detailed Excel spreadsheets and professional PDF reports.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # How It Works Section
+    st.markdown("---")
+    st.markdown("### 🎯 How It Works")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("#### 1️⃣ Enter Your Info")
+        st.write("Current wealth, income, expenses, and goals")
+    
+    with col2:
+        st.markdown("#### 2️⃣ Add Life Events")
+        st.write("Property purchases, children, career changes")
+    
+    with col3:
+        st.markdown("#### 3️⃣ See Your Future")
+        st.write("View projections, percentiles, and export results")
+    
+    # Testimonials
+    st.markdown("---")
+    st.markdown("### 💬 What Users Say")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("""
+        <div class="testimonial">
+            "FinSim helped me understand if I could afford to move from Vancouver to Dublin. 
+            The real estate modeling made it so clear!"
+            <div class="testimonial-author">— Sarah, 32, Software Engineer</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+        <div class="testimonial">
+            "I love that it shows the range of outcomes, not just one number. 
+            Makes planning feel more realistic."
+            <div class="testimonial-author">— Mike, 45, Financial Analyst</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Footer
+    st.markdown("---")
+    st.markdown("""
+        <div style="text-align: center; color: #666; padding: 2rem 0;">
+            <p><strong>FinSim</strong> - Plan Your Financial Future with Confidence</p>
+            <p style="font-size: 0.9rem;">
+                <a href="#" style="color: #667eea; text-decoration: none;">About</a> • 
+                <a href="#" style="color: #667eea; text-decoration: none;">Privacy</a> • 
+                <a href="#" style="color: #667eea; text-decoration: none;">Terms</a> • 
+                <a href="#" style="color: #667eea; text-decoration: none;">Contact</a>
+            </p>
+            <p style="font-size: 0.8rem; opacity: 0.7;">
+                Educational tool only. Not financial advice. Consult a professional advisor.
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+
+
+# ==============================================================================
+# HOW TO USE
+# ==============================================================================
+
+"""
+In your wealth_simulator.py, replace the authentication check with this:
+
+# BEFORE:
+if not st.session_state.get('authenticated', False):
+    show_login_page()
+    st.stop()
+
+# AFTER:
+if not st.session_state.get('authenticated', False):
+    show_landing_page()
+    st.stop()
+"""
