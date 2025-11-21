@@ -28,18 +28,21 @@ except:
 # Initialize session state
 initialize_session_state()
 
-# # Check authentication - wrap your entire app
-# if not st.session_state.get('authenticated', False):
-#     # Show login/register page
-#     show_login_page()
-#     st.stop()  # Don't run the rest of the app
-
 if not st.session_state.get('authenticated', False):
     show_landing_page()  # Instead of show_login_page()
     st.stop()
-    
+
 # Show user header
 show_user_header()
+
+try:
+    import plotly.io as pio
+    test_fig = go.Figure()
+    pio.to_image(test_fig, format='png', width=10, height=10)
+    PDF_EXPORT_AVAILABLE = True
+except Exception as e:
+    PDF_EXPORT_AVAILABLE = False
+    print(f"PDF export unavailable: {e}")
 
 if st.session_state.authenticated:
     st.sidebar.markdown("---")
@@ -140,6 +143,10 @@ def export_to_excel(results, currency_symbol, selected_currency, events,
             'border': 1
         })
         
+        # Get actual simulation years from results shape
+        actual_years = results['net_worth'].shape[1] - 1  # Subtract 1 because includes year 0
+        years_array = np.arange(0, actual_years + 1)  # ✅ Dynamic based on results
+        
         # Sheet 1: Summary Statistics
         summary_data = {
             'Metric': [
@@ -166,10 +173,9 @@ def export_to_excel(results, currency_symbol, selected_currency, events,
         worksheet.set_column('A:A', 35)
         worksheet.set_column('B:B', 20)
         
-        # Sheet 2: Net Worth Projections (Percentiles)
-        years = np.arange(0, 31)
+        # Sheet 2: Net Worth Projections (Percentiles) - ✅ Use actual years
         percentiles_data = {
-            'Year': years,
+            'Year': years_array,
             '10th Percentile': np.percentile(results['net_worth'], 10, axis=0),
             '25th Percentile': np.percentile(results['net_worth'], 25, axis=0),
             '50th Percentile (Median)': np.percentile(results['net_worth'], 50, axis=0),
@@ -179,9 +185,9 @@ def export_to_excel(results, currency_symbol, selected_currency, events,
         percentiles_df = pd.DataFrame(percentiles_data)
         percentiles_df.to_excel(writer, sheet_name='Net Worth Projections', index=False)
         
-        # Sheet 3: Wealth Components (Median)
+        # Sheet 3: Wealth Components (Median) - ✅ Use actual years
         components_data = {
-            'Year': years,
+            'Year': years_array,
             'Liquid Wealth': np.median(results['liquid_wealth'], axis=0),
             'Pension Wealth': np.median(results['pension_wealth'], axis=0),
             'Property Value': np.median(results['property_value'], axis=0),
@@ -229,7 +235,8 @@ def export_to_excel(results, currency_symbol, selected_currency, events,
                 'Initial Mortgage',
                 'Initial Net Worth',
                 'Gross Annual Income',
-                'Monthly Expenses'
+                'Monthly Expenses',
+                'Simulation Years'  # ✅ Add this
             ],
             'Value': [
                 selected_currency,
@@ -238,7 +245,8 @@ def export_to_excel(results, currency_symbol, selected_currency, events,
                 initial_mortgage,
                 initial_liquid_wealth + initial_property_value - initial_mortgage,
                 gross_annual_income,
-                monthly_expenses
+                monthly_expenses,
+                actual_years  # ✅ Add this
             ]
         }
         assumptions_df = pd.DataFrame(assumptions_data)
@@ -1370,23 +1378,30 @@ if st.session_state.get('sim_complete', False):
         # Track export usage
         increment_export_count(st.session_state.user_id)
 
-    
     with col_exp2:
-        # PDF export - pass both figures
-        pdf_file = export_to_pdf(
-            results, currency_symbol, selected_currency, events, fig, fig_composition,
-            gross_annual_income, monthly_expenses, initial_liquid_wealth,
-            initial_property_value, initial_mortgage
-        )
-        
-        st.download_button(
-            label="📄 Export to PDF",
-            data=pdf_file,
-            file_name=f"wealth_simulation_{timestamp}.pdf",
-            mime="application/pdf",
-            use_container_width=True,
-            help="Download formatted PDF report with charts"
-        )
+        if PDF_EXPORT_AVAILABLE:
+            pdf_file = export_to_pdf(
+                results, currency_symbol, selected_currency, events, fig, fig_composition,
+                gross_annual_income, monthly_expenses, initial_liquid_wealth,
+                initial_property_value, initial_mortgage
+            )
+            
+            st.download_button(
+                label="📄 Export to PDF",
+                data=pdf_file,
+                file_name=f"wealth_simulation_{timestamp}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                help="Download formatted PDF report with charts"
+            )
+        else:
+            st.button(
+                label="📄 Export to PDF",
+                disabled=True,
+                use_container_width=True,
+                help="PDF export requires Chrome (Excel export still works!)"
+            )
+            st.caption("⚠️ PDF unavailable - use Excel export instead")
         # Track export usage
         increment_export_count(st.session_state.user_id)
 
