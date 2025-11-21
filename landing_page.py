@@ -113,7 +113,7 @@ def show_landing_page():
     # Hero Section
     st.markdown("""
         <div class="hero">
-            <h1>💰 FinSim</h1>
+            <h1>🦉 FinSim</h1>
             <p>Plan Your Financial Future with Confidence</p>
             <p style="font-size: 1rem; opacity: 0.9;">
                 Monte Carlo simulations • Retirement planning • Real estate modeling • 100% Free
@@ -125,11 +125,11 @@ def show_landing_page():
     st.markdown("""
         <div class="stat-container">
             <div class="stat-box">
-                <div class="stat-number">10K+</div>
+                <div class="stat-number">100+</div>
                 <div class="stat-label">Simulations Run</div>
             </div>
             <div class="stat-box">
-                <div class="stat-number">5</div>
+                <div class="stat-number">10</div>
                 <div class="stat-label">Free per Month</div>
             </div>
             <div class="stat-box">
@@ -274,7 +274,7 @@ def show_landing_page():
         st.write("Property purchases, children, career changes")
     
     with col3:
-        st.markdown("#### 3️⃣ See Your Future")
+        st.markdown("#### 3️⃣ Plan Your Financial Future")
         st.write("View projections, percentiles, and export results")
     
     # Testimonials
@@ -286,18 +286,16 @@ def show_landing_page():
     with col1:
         st.markdown("""
         <div class="testimonial">
-            "FinSim helped me understand if I could afford to move from Vancouver to Dublin. 
-            The real estate modeling made it so clear!"
-            <div class="testimonial-author">— Sarah, 32, Software Engineer</div>
+            "FinSim helped me understand Monte Carlo simulations"
+            <div class="testimonial-author">— Niall, 34, FinSim Developer</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col2:
         st.markdown("""
         <div class="testimonial">
-            "I love that it shows the range of outcomes, not just one number. 
-            Makes planning feel more realistic."
-            <div class="testimonial-author">— Mike, 45, Financial Analyst</div>
+            "Hmmm."
+            <div class="testimonial-author">— Helen, 30, Data Wizard</div>
         </div>
         """, unsafe_allow_html=True)
     
@@ -319,20 +317,4 @@ def show_landing_page():
     """, unsafe_allow_html=True)
 
 
-# ==============================================================================
-# HOW TO USE
-# ==============================================================================
 
-"""
-In your wealth_simulator.py, replace the authentication check with this:
-
-# BEFORE:
-if not st.session_state.get('authenticated', False):
-    show_login_page()
-    st.stop()
-
-# AFTER:
-if not st.session_state.get('authenticated', False):
-    show_landing_page()
-    st.stop()
-"""
