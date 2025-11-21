@@ -1,0 +1,29 @@
+# Render Deployment Configuration
+# Save this as render.yaml in your project root
+
+services:
+  # Main Streamlit App
+  - type: web
+    name: finsim-app
+    env: python
+    plan: starter  # $7/month (or free for testing)
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run wealth_simulator.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: DATABASE_URL
+        fromDatabase:
+          name: finsim-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: FREE_SIMULATION_LIMIT
+        value: 5
+
+databases:
+  # PostgreSQL Database
+  - name: finsim-db
+    plan: starter  # Free tier available
+    databaseName: finsim
+    user: finsim_user
