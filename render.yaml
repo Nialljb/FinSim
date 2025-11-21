@@ -7,8 +7,15 @@ services:
     name: finsim-app
     env: python
     runtime: python
-    plan: free #starter  # $7/month (or use 'free' for testing with auto-sleep)
-    buildCommand: pip install -r requirements.txt
+    plan: starter  # $7/month (or use 'free' for testing with auto-sleep)
+    buildCommand: |
+      # Install Chrome for PDF generation
+      curl -LO https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+      apt-get update
+      apt-get install -y ./google-chrome-stable_current_amd64.deb
+      rm google-chrome-stable_current_amd64.deb
+      # Install Python dependencies
+      pip install -r requirements.txt
     startCommand: streamlit run wealth_simulator.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true
     envVars:
       - key: PYTHON_VERSION
@@ -20,7 +27,7 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: FREE_SIMULATION_LIMIT
-        value: 10
+        value: 5
 
 databases:
   # PostgreSQL Database

@@ -11,6 +11,7 @@ env/
 *.db
 *.db-journal
 finsim.db
+docs/
 
 # Environment
 .env
