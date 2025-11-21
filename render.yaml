@@ -7,7 +7,7 @@ services:
     name: finsim-app
     env: python
     runtime: python
-    plan: starter  # $7/month (or use 'free' for testing with auto-sleep)
+    plan: free #starter  # $7/month (or use 'free' for testing with auto-sleep)
     buildCommand: |
       # Install Chrome for PDF generation
       curl -LO https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
@@ -27,7 +27,7 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: FREE_SIMULATION_LIMIT
-        value: 5
+        value: 10  # Max free simulations per user
 
 databases:
   # PostgreSQL Database
