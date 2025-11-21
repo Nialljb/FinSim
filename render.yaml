@@ -6,7 +6,8 @@ services:
   - type: web
     name: finsim-app
     env: python
-    plan: starter  # $7/month (or free for testing)
+    runtime: python
+    plan: starter  # $7/month (or use 'free' for testing with auto-sleep)
     buildCommand: pip install -r requirements.txt
     startCommand: streamlit run wealth_simulator.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true
     envVars:
@@ -24,6 +25,8 @@ services:
 databases:
   # PostgreSQL Database
   - name: finsim-db
-    plan: starter  # Free tier available
+    plan: free  # Free tier: 1GB storage, expires after 90 days of inactivity
+    # OR use 'standard' for $7/month: 10GB storage, no expiration
     databaseName: finsim
     user: finsim_user
+    region: oregon  # Choose: oregon, frankfurt, ohio, singapore
