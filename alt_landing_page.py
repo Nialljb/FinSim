@@ -18,7 +18,7 @@ def show_landing_page():
         page_title="FinSim - Financial Planning Simulator",
         page_icon="🦉",
         layout="wide",
-        initial_sidebar_state="collapsed"  # Hide sidebar on landing page
+        # initial_sidebar_state="collapsed"  # Hide sidebar on landing page
     )
     
     # Custom CSS for landing page with width control
