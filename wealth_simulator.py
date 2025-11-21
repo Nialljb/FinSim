@@ -16,8 +16,15 @@ import streamlit as st
 from auth import initialize_session_state, show_login_page, show_user_header, check_simulation_limit, increment_simulation_count, increment_export_count
 from data_tracking import save_simulation
 from database import init_db
-from landing_page import show_landing_page
+# from landing_page import show_landing_page
+from alt_landing_page import show_landing_page
 
+st.set_page_config(
+    page_title="FinSim - Financial Planning",
+    page_icon="💰",
+    layout="wide",  # ✅ Force wide layout
+    # initial_sidebar_state="collapsed"  # ✅ Hide sidebar on landing
+)
 
 # Initialize database on first run
 try:
@@ -44,61 +51,12 @@ except Exception as e:
     PDF_EXPORT_AVAILABLE = False
     print(f"PDF export unavailable: {e}")
 
-if st.session_state.authenticated:
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("📅 Simulation Timeline")
-    
-    # Get defaults from user profile
-    default_current_age = st.session_state.current_age
-    default_retirement_age = st.session_state.target_retirement_age
-    
-    # Allow user to override for scenario planning
-    col1, col2 = st.sidebar.columns(2)
-    
-    with col1:
-        starting_age = st.number_input(
-            "Starting Age",
-            min_value=18,
-            max_value=100,
-            value=default_current_age,
-            step=1,
-            help="Age to start simulation from (defaults to your current age)"
-        )
-    
-    with col2:
-        retirement_age = st.number_input(
-            "Retirement Age",
-            min_value=starting_age + 1,  # Must be at least 1 year after starting age
-            max_value=100,
-            value=default_retirement_age,
-            step=1,
-            help="Target retirement age"
-        )
-    
-    # Calculate simulation years
-    simulation_years = retirement_age - starting_age
-    
-    # Show calculation
-    st.sidebar.info(f"📊 Simulating **{simulation_years} years** (Age {starting_age} → {retirement_age})")
-    
-    # Validation
-    if simulation_years <= 0:
-        st.sidebar.error("⚠️ Retirement age must be greater than starting age")
-        st.stop()
-    
-    if simulation_years > 60:
-        st.sidebar.warning(f"⚠️ Long simulation: {simulation_years} years")
-    
-    st.sidebar.markdown("---")
-
-# Set page config
-st.set_page_config(page_title="Wealth Path Simulator", layout="wide")
-
 # Currency configuration
 CURRENCIES = {
-    'CAD': {'symbol': 'C$', 'name': 'Canadian Dollar', 'locale': 'en_CA'},
+    
     'EUR': {'symbol': '€', 'name': 'Euro', 'locale': 'de_DE'},
     'GBP': {'symbol': '£', 'name': 'British Pound', 'locale': 'en_GB'},
+    'CAD': {'symbol': 'C$', 'name': 'Canadian Dollar', 'locale': 'en_CA'},
     'USD': {'symbol': '$', 'name': 'US Dollar', 'locale': 'en_US'},
     'AUD': {'symbol': 'A$', 'name': 'Australian Dollar', 'locale': 'en_AU'},
     'NZD': {'symbol': 'NZ$', 'name': 'New Zealand Dollar', 'locale': 'en_NZ'},
@@ -441,13 +399,64 @@ def export_to_pdf(results, currency_symbol, selected_currency, events, fig_main,
     output.seek(0)
     return output
 
+# ----------------------
+# Sidebar - Simulation Timeline
+# ----------------------
+# Set page config
+st.set_page_config(page_title="Wealth Path Simulator", layout="wide")
+
 # Title
 st.title("30-Year Wealth Path Simulator")
 st.markdown("Interactive Monte Carlo simulation to explore your financial future")
 
-# Sidebar - Currency Selection
-st.sidebar.header("⚙️ Settings")
+if st.session_state.authenticated:
+    st.sidebar.header("⚙️ Settings")
+    
+    # Get defaults from user profile
+    default_current_age = st.session_state.current_age
+    default_retirement_age = st.session_state.target_retirement_age
+    
+    # Allow user to override for scenario planning
+    col1, col2 = st.sidebar.columns(2)
+    
+    with col1:
+        starting_age = st.number_input(
+            "Starting Age",
+            min_value=18,
+            max_value=100,
+            value=default_current_age,
+            step=1,
+            help="Age to start simulation from (defaults to your current age)"
+        )
+    
+    with col2:
+        retirement_age = st.number_input(
+            "Retirement Age",
+            min_value=starting_age + 1,  # Must be at least 1 year after starting age
+            max_value=100,
+            value=default_retirement_age,
+            step=1,
+            help="Target retirement age"
+        )
+    
+    # Calculate simulation years
+    simulation_years = retirement_age - starting_age
+    
+    # Show calculation
+    st.sidebar.info(f"Simulating **{simulation_years} years** (Age {starting_age} → {retirement_age})")
+    
+    # Validation
+    if simulation_years <= 0:
+        st.sidebar.error("⚠️ Retirement age must be greater than starting age")
+        st.stop()
+    
+    if simulation_years > 60:
+        st.sidebar.warning(f"⚠️ Long simulation: {simulation_years} years")
+    
+    st.sidebar.markdown("---")
 
+
+# Sidebar - Currency Selection
 selected_currency = st.sidebar.selectbox(
     "Currency",
     options=list(CURRENCIES.keys()),
@@ -458,7 +467,7 @@ selected_currency = st.sidebar.selectbox(
 
 currency_symbol = CURRENCIES[selected_currency]['symbol']
 
-st.sidebar.markdown("---")
+# st.sidebar.markdown("---")
 
 # Sidebar controls
 st.sidebar.header("Initial Position")
@@ -476,7 +485,7 @@ initial_liquid_wealth = st.sidebar.number_input(
 initial_property_value = st.sidebar.number_input(
     f"Initial Property Value ({currency_symbol})",
     min_value=0,
-    value=500000,
+    value=00000,
     step=25000,
     help="Current market value of property"
 )
@@ -484,7 +493,7 @@ initial_property_value = st.sidebar.number_input(
 initial_mortgage = st.sidebar.number_input(
     f"Initial Mortgage Balance ({currency_symbol})",
     min_value=0,
-    value=300000,
+    value=00000,
     step=25000,
     help="Outstanding mortgage debt"
 )
@@ -518,13 +527,15 @@ if initial_mortgage > 0 and initial_mortgage_amortization > 0:
 else:
     calculated_payment = 0
 
+st.sidebar.markdown("---")
+
 # Income and tax
 st.sidebar.header("Income & Tax")
 
 gross_annual_income = st.sidebar.number_input(
     f"Gross Annual Income ({currency_symbol})",
     min_value=0,
-    value=120000,
+    value=60000,
     step=5000
 )
 
@@ -552,7 +563,7 @@ st.sidebar.header("Monthly Budget")
 monthly_expenses = st.sidebar.number_input(
     f"Monthly Living Expenses ({currency_symbol})",
     min_value=0,
-    value=4000,
+    value=2500,
     step=250,
     help="Regular monthly expenses (excluding mortgage)"
 )
@@ -561,6 +572,8 @@ if calculated_payment > 0:
     st.sidebar.info(f"💡 Calculated mortgage payment: {format_currency(calculated_payment, selected_currency)}/month")
 
 monthly_mortgage_payment = calculated_payment
+
+st.sidebar.markdown("---")
 
 # Property assumptions
 st.sidebar.header("Property Assumptions")
@@ -636,6 +649,8 @@ salary_inflation = st.sidebar.slider(
     help="Annual salary increase (separate from general inflation)"
 ) / 100
 
+st.sidebar.markdown("---")
+
 # Simulation parameters
 st.sidebar.subheader("Simulation Settings")
 
@@ -652,6 +667,8 @@ random_seed = st.sidebar.number_input(
     value=42,
     step=1
 )
+
+st.sidebar.markdown("---")
 
 # Major events section
 st.sidebar.subheader("Major Financial Events")
