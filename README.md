@@ -243,4 +243,4 @@ For questions, suggestions, or feedback, please open an issue on GitHub.
 
 ---
 
-**Disclaimer**: This tool is for educational and planning purposes only. It is not financial advice. Consult with a qualified financial advisor before making investment decisions. Past performance does not guarantee future results. All projections are hypothetical and subject to significant uncertainty.# FinSim
+**Disclaimer**: This tool is for educational and planning purposes only. It is not financial advice. Consult with a qualified financial advisor before making investment decisions. Past performance does not guarantee future results. All projections are hypothetical and subject to significant uncertainty. #FinSim
