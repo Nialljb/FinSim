@@ -3,39 +3,405 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from datetime import datetime
+import io
+from reportlab.lib.colors import HexColor, whitesmoke, beige, black
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, Image
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
+import plotly.io as pio
 
 # Set page config
 st.set_page_config(page_title="Wealth Path Simulator", layout="wide")
 
+# Currency configuration
+CURRENCIES = {
+    'CAD': {'symbol': 'C$', 'name': 'Canadian Dollar', 'locale': 'en_CA'},
+    'EUR': {'symbol': '€', 'name': 'Euro', 'locale': 'de_DE'},
+    'GBP': {'symbol': '£', 'name': 'British Pound', 'locale': 'en_GB'},
+    'USD': {'symbol': '$', 'name': 'US Dollar', 'locale': 'en_US'},
+    'AUD': {'symbol': 'A$', 'name': 'Australian Dollar', 'locale': 'en_AU'},
+    'NZD': {'symbol': 'NZ$', 'name': 'New Zealand Dollar', 'locale': 'en_NZ'},
+    'CHF': {'symbol': 'CHF', 'name': 'Swiss Franc', 'locale': 'de_CH'},
+    'SEK': {'symbol': 'kr', 'name': 'Swedish Krona', 'locale': 'sv_SE'},
+    'NOK': {'symbol': 'kr', 'name': 'Norwegian Krone', 'locale': 'nb_NO'},
+    'DKK': {'symbol': 'kr', 'name': 'Danish Krone', 'locale': 'da_DK'},
+    'JPY': {'symbol': '¥', 'name': 'Japanese Yen', 'locale': 'ja_JP'},
+    'CNY': {'symbol': '¥', 'name': 'Chinese Yuan', 'locale': 'zh_CN'},
+    'INR': {'symbol': '₹', 'name': 'Indian Rupee', 'locale': 'hi_IN'},
+    'SGD': {'symbol': 'S$', 'name': 'Singapore Dollar', 'locale': 'en_SG'},
+    'HKD': {'symbol': 'HK$', 'name': 'Hong Kong Dollar', 'locale': 'zh_HK'},
+}
+
+# Helper function to format currency
+def format_currency(amount, currency_code):
+    """Format amount with appropriate currency symbol"""
+    symbol = CURRENCIES[currency_code]['symbol']
+    
+    # Handle negative values
+    if amount < 0:
+        return f"-{symbol}{abs(amount):,.0f}"
+    return f"{symbol}{amount:,.0f}"
+
+
+def export_to_excel(results, currency_symbol, selected_currency, events, 
+                    gross_annual_income, monthly_expenses, initial_liquid_wealth,
+                    initial_property_value, initial_mortgage):
+    """Export simulation results to Excel file"""
+    output = io.BytesIO()
+    
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        workbook = writer.book
+        
+        # Format definitions
+        currency_format = workbook.add_format({'num_format': f'{currency_symbol}#,##0'})
+        percent_format = workbook.add_format({'num_format': '0.0%'})
+        header_format = workbook.add_format({
+            'bold': True,
+            'bg_color': '#4CAF50',
+            'font_color': 'white',
+            'border': 1
+        })
+        
+        # Sheet 1: Summary Statistics
+        summary_data = {
+            'Metric': [
+                'Median Final Net Worth',
+                'Mean Final Net Worth',
+                '10th Percentile Final Net Worth',
+                '90th Percentile Final Net Worth',
+                'Probability of Growth',
+                'Probability of 2x Growth'
+            ],
+            'Value': [
+                np.median(results['net_worth'][:, -1]),
+                np.mean(results['net_worth'][:, -1]),
+                np.percentile(results['net_worth'][:, -1], 10),
+                np.percentile(results['net_worth'][:, -1], 90),
+                (results['net_worth'][:, -1] > results['net_worth'][:, 0]).mean(),
+                (results['net_worth'][:, -1] > results['net_worth'][:, 0] * 2).mean()
+            ]
+        }
+        summary_df = pd.DataFrame(summary_data)
+        summary_df.to_excel(writer, sheet_name='Summary', index=False)
+        
+        worksheet = writer.sheets['Summary']
+        worksheet.set_column('A:A', 35)
+        worksheet.set_column('B:B', 20)
+        
+        # Sheet 2: Net Worth Projections (Percentiles)
+        years = np.arange(0, 31)
+        percentiles_data = {
+            'Year': years,
+            '10th Percentile': np.percentile(results['net_worth'], 10, axis=0),
+            '25th Percentile': np.percentile(results['net_worth'], 25, axis=0),
+            '50th Percentile (Median)': np.percentile(results['net_worth'], 50, axis=0),
+            '75th Percentile': np.percentile(results['net_worth'], 75, axis=0),
+            '90th Percentile': np.percentile(results['net_worth'], 90, axis=0),
+        }
+        percentiles_df = pd.DataFrame(percentiles_data)
+        percentiles_df.to_excel(writer, sheet_name='Net Worth Projections', index=False)
+        
+        # Sheet 3: Wealth Components (Median)
+        components_data = {
+            'Year': years,
+            'Liquid Wealth': np.median(results['liquid_wealth'], axis=0),
+            'Pension Wealth': np.median(results['pension_wealth'], axis=0),
+            'Property Value': np.median(results['property_value'], axis=0),
+            'Mortgage Balance': np.median(results['mortgage_balance'], axis=0),
+            'Property Equity': np.median(results['property_value'] - results['mortgage_balance'], axis=0),
+            'Total Net Worth': np.median(results['net_worth'], axis=0)
+        }
+        components_df = pd.DataFrame(components_data)
+        components_df.to_excel(writer, sheet_name='Wealth Components', index=False)
+        
+        # Sheet 4: Events
+        if events:
+            events_data = []
+            for event in events:
+                event_row = {
+                    'Year': event['year'],
+                    'Type': event['type'].replace('_', ' ').title(),
+                    'Description': event['name']
+                }
+                
+                if event['type'] == 'property_purchase':
+                    event_row['Details'] = f"Price: {event['property_price']}, Down: {event['down_payment']}, Mortgage: {event['mortgage_amount']}"
+                elif event['type'] == 'property_sale':
+                    event_row['Details'] = f"Sale: {event['sale_price']}, Payoff: {event['mortgage_payoff']}, Costs: {event['selling_costs']}"
+                elif event['type'] == 'one_time_expense':
+                    event_row['Details'] = f"Expense: {event['amount']}"
+                elif event['type'] == 'expense_change':
+                    event_row['Details'] = f"Monthly Change: {event['monthly_change']}"
+                elif event['type'] == 'rental_income':
+                    event_row['Details'] = f"Monthly Rental: {event['monthly_rental']}"
+                elif event['type'] == 'windfall':
+                    event_row['Details'] = f"Amount: {event['amount']}"
+                
+                events_data.append(event_row)
+            
+            events_df = pd.DataFrame(events_data)
+            events_df.to_excel(writer, sheet_name='Events', index=False)
+        
+        # Sheet 5: Initial Assumptions
+        assumptions_data = {
+            'Parameter': [
+                'Currency',
+                'Initial Liquid Wealth',
+                'Initial Property Value',
+                'Initial Mortgage',
+                'Initial Net Worth',
+                'Gross Annual Income',
+                'Monthly Expenses'
+            ],
+            'Value': [
+                selected_currency,
+                initial_liquid_wealth,
+                initial_property_value,
+                initial_mortgage,
+                initial_liquid_wealth + initial_property_value - initial_mortgage,
+                gross_annual_income,
+                monthly_expenses
+            ]
+        }
+        assumptions_df = pd.DataFrame(assumptions_data)
+        assumptions_df.to_excel(writer, sheet_name='Assumptions', index=False)
+    
+    output.seek(0)
+    return output
+
+
+def export_to_pdf(results, currency_symbol, selected_currency, events, fig_main, fig_composition,
+                  gross_annual_income, monthly_expenses, initial_liquid_wealth,
+                  initial_property_value, initial_mortgage):
+    """Export simulation results to PDF file"""
+    output = io.BytesIO()
+    
+    # Create PDF document
+    doc = SimpleDocTemplate(output, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch)
+    story = []
+    styles = getSampleStyleSheet()
+    
+    # Custom styles
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=24,
+        textColor=HexColor('#2E7D32'),
+        spaceAfter=30,
+        alignment=TA_CENTER
+    )
+    
+    heading_style = ParagraphStyle(
+        'CustomHeading',
+        parent=styles['Heading2'],
+        fontSize=16,
+        textColor=HexColor('#1976D2'),
+        spaceAfter=12,
+        spaceBefore=12
+    )
+    
+    # Title
+    title = Paragraph("Wealth Simulation Report", title_style)
+    story.append(title)
+    
+    # Date and currency
+    date_text = f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}<br/>Currency: {selected_currency}"
+    story.append(Paragraph(date_text, styles['Normal']))
+    story.append(Spacer(1, 0.3*inch))
+    
+    # Summary Statistics
+    story.append(Paragraph("Summary Statistics", heading_style))
+    
+    final_net_worth = results['net_worth'][:, -1]
+    initial_net_worth = results['net_worth'][:, 0]
+    
+    summary_data = [
+        ['Metric', 'Value'],
+        ['Median Final Net Worth', format_currency(np.median(final_net_worth), selected_currency)],
+        ['Mean Final Net Worth', format_currency(np.mean(final_net_worth), selected_currency)],
+        ['10th Percentile', format_currency(np.percentile(final_net_worth, 10), selected_currency)],
+        ['90th Percentile', format_currency(np.percentile(final_net_worth, 90), selected_currency)],
+        ['Probability of Growth', f"{(final_net_worth > initial_net_worth).mean()*100:.1f}%"],
+        ['Probability of 2x Growth', f"{(final_net_worth > initial_net_worth*2).mean()*100:.1f}%"],
+    ]
+    
+    summary_table = Table(summary_data, colWidths=[3.5*inch, 2*inch])
+    summary_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), HexColor('#4CAF50')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), beige),
+        ('GRID', (0, 0), (-1, -1), 1, black)
+    ]))
+    story.append(summary_table)
+    story.append(Spacer(1, 0.3*inch))
+    
+    # Initial Position
+    story.append(Paragraph("Initial Position", heading_style))
+    
+    initial_data = [
+        ['Component', 'Amount'],
+        ['Liquid Wealth', format_currency(initial_liquid_wealth, selected_currency)],
+        ['Property Value', format_currency(initial_property_value, selected_currency)],
+        ['Mortgage Debt', format_currency(-initial_mortgage, selected_currency)],
+        ['Net Worth', format_currency(initial_liquid_wealth + initial_property_value - initial_mortgage, selected_currency)],
+        ['', ''],
+        ['Gross Annual Income', format_currency(gross_annual_income, selected_currency)],
+        ['Monthly Expenses', format_currency(monthly_expenses, selected_currency)],
+    ]
+    
+    initial_table = Table(initial_data, colWidths=[3.5*inch, 2*inch])
+    initial_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), HexColor('#4CAF50')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), beige),
+        ('GRID', (0, 0), (-1, -1), 1, black)
+    ]))
+    story.append(initial_table)
+    
+    # Events (if any)
+    if events:
+        story.append(PageBreak())
+        story.append(Paragraph("Configured Financial Events", heading_style))
+        
+        events_data = [['Year', 'Type', 'Description']]
+        for event in events:
+            events_data.append([
+                str(event['year']),
+                event['type'].replace('_', ' ').title(),
+                event['name']
+            ])
+        
+        events_table = Table(events_data, colWidths=[0.8*inch, 2*inch, 3*inch])
+        events_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), HexColor('#4CAF50')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), beige),
+            ('GRID', (0, 0), (-1, -1), 1, black)
+        ]))
+        story.append(events_table)
+    
+    # Add charts as images
+    story.append(PageBreak())
+    story.append(Paragraph("Net Worth Trajectory", heading_style))
+    
+    # Convert plotly figure to image
+    img_bytes = pio.to_image(fig_main, format='png', width=700, height=400)
+    img = Image(io.BytesIO(img_bytes), width=6.5*inch, height=3.7*inch)
+    story.append(img)
+    
+    story.append(Spacer(1, 0.2*inch))
+    story.append(Paragraph("Wealth Composition", heading_style))
+    
+    img_bytes2 = pio.to_image(fig_composition, format='png', width=700, height=400)
+    img2 = Image(io.BytesIO(img_bytes2), width=6.5*inch, height=3.7*inch)
+    story.append(img2)
+    
+    # Percentile breakdown table
+    story.append(PageBreak())
+    story.append(Paragraph("Net Worth Percentiles by Year", heading_style))
+    
+    milestone_years = [5, 10, 15, 20, 25, 30]
+    percentile_data = [['Year', '10th', '25th', '50th (Median)', '75th', '90th']]
+    
+    for year in milestone_years:
+        year_wealth = results['net_worth'][:, year]
+        percentile_data.append([
+            str(year),
+            format_currency(np.percentile(year_wealth, 10), selected_currency),
+            format_currency(np.percentile(year_wealth, 25), selected_currency),
+            format_currency(np.percentile(year_wealth, 50), selected_currency),
+            format_currency(np.percentile(year_wealth, 75), selected_currency),
+            format_currency(np.percentile(year_wealth, 90), selected_currency),
+        ])
+    
+    percentile_table = Table(percentile_data, colWidths=[0.6*inch, 1.1*inch, 1.1*inch, 1.2*inch, 1.1*inch, 1.1*inch])
+    percentile_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), HexColor('#4CAF50')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), beige),
+        ('GRID', (0, 0), (-1, -1), 1, black),
+        ('FONTSIZE', (0, 1), (-1, -1), 8),
+    ]))
+    story.append(percentile_table)
+    
+    # Disclaimer
+    story.append(Spacer(1, 0.3*inch))
+    disclaimer = Paragraph(
+        "<i>Disclaimer: This report is for educational and planning purposes only. "
+        "It is not financial advice. Past performance does not guarantee future results. "
+        "Consult with a qualified financial advisor before making investment decisions.</i>",
+        styles['Normal']
+    )
+    story.append(disclaimer)
+    
+    # Build PDF
+    doc.build(story)
+    output.seek(0)
+    return output
+
 # Title
 st.title("30-Year Wealth Path Simulator")
 st.markdown("Interactive Monte Carlo simulation to explore your financial future")
+
+# Sidebar - Currency Selection
+st.sidebar.header("⚙️ Settings")
+
+selected_currency = st.sidebar.selectbox(
+    "Currency",
+    options=list(CURRENCIES.keys()),
+    format_func=lambda x: f"{CURRENCIES[x]['symbol']} {CURRENCIES[x]['name']} ({x})",
+    index=0,  # Default to USD
+    help="Select your preferred currency for all amounts"
+)
+
+currency_symbol = CURRENCIES[selected_currency]['symbol']
+
+st.sidebar.markdown("---")
 
 # Sidebar controls
 st.sidebar.header("Initial Position")
 
 # Initial liquid wealth
 initial_liquid_wealth = st.sidebar.number_input(
-    "Initial Liquid Wealth ($)",
+    f"Initial Liquid Wealth ({currency_symbol})",
     min_value=0,
-    value=20000,
+    value=50000,
     step=10000,
     help="Cash, investments, and other liquid assets"
 )
 
 # Initial property
 initial_property_value = st.sidebar.number_input(
-    "Initial Property Value ($)",
+    f"Initial Property Value ({currency_symbol})",
     min_value=0,
-    value=300000,
+    value=500000,
     step=25000,
     help="Current market value of property"
 )
 
 initial_mortgage = st.sidebar.number_input(
-    "Initial Mortgage Balance ($)",
+    f"Initial Mortgage Balance ({currency_symbol})",
     min_value=0,
-    value=200000,
+    value=300000,
     step=25000,
     help="Outstanding mortgage debt"
 )
@@ -53,7 +419,7 @@ mortgage_interest_rate = st.sidebar.slider(
     "Mortgage Interest Rate (%)",
     min_value=0.0,
     max_value=10.0,
-    value=4.5,
+    value=3.5,
     step=0.25
 ) / 100
 
@@ -73,9 +439,9 @@ else:
 st.sidebar.header("Income & Tax")
 
 gross_annual_income = st.sidebar.number_input(
-    "Gross Annual Income ($)",
+    f"Gross Annual Income ({currency_symbol})",
     min_value=0,
-    value=75000,
+    value=120000,
     step=5000
 )
 
@@ -83,7 +449,7 @@ effective_tax_rate = st.sidebar.slider(
     "Effective Tax Rate (%)",
     min_value=0.0,
     max_value=50.0,
-    value=24.0,
+    value=25.0,
     step=1.0,
     help="Average tax rate on income"
 ) / 100
@@ -92,7 +458,7 @@ pension_contribution_rate = st.sidebar.slider(
     "Pension Contribution (% of gross)",
     min_value=0.0,
     max_value=30.0,
-    value=15.0,
+    value=10.0,
     step=1.0,
     help="Pre-tax pension contribution as % of gross income"
 ) / 100
@@ -101,15 +467,15 @@ pension_contribution_rate = st.sidebar.slider(
 st.sidebar.header("Monthly Budget")
 
 monthly_expenses = st.sidebar.number_input(
-    "Monthly Living Expenses ($)",
+    f"Monthly Living Expenses ({currency_symbol})",
     min_value=0,
-    value=2000,
+    value=4000,
     step=250,
     help="Regular monthly expenses (excluding mortgage)"
 )
 
 if calculated_payment > 0:
-    st.sidebar.info(f"💡 Calculated mortgage payment: ${calculated_payment:,.2f}/month")
+    st.sidebar.info(f"💡 Calculated mortgage payment: {format_currency(calculated_payment, selected_currency)}/month")
 
 monthly_mortgage_payment = calculated_payment
 
@@ -131,7 +497,7 @@ expected_return = st.sidebar.slider(
     "Expected Annual Return (%)",
     min_value=0.0,
     max_value=15.0,
-    value=4.0,
+    value=7.0,
     step=0.5,
     help="Average expected portfolio return"
 ) / 100
@@ -233,14 +599,14 @@ for i in range(n_events):
         
         if event_type == "Property Purchase":
             property_price = st.number_input(
-                "Property Price ($)", 
+                f"Property Price ({currency_symbol})", 
                 min_value=0, 
                 value=500000, 
                 step=25000, 
                 key=f"prop_price_{i}"
             )
             down_payment = st.number_input(
-                "Down Payment ($)", 
+                f"Down Payment ({currency_symbol})", 
                 min_value=0, 
                 value=100000, 
                 step=10000, 
@@ -248,7 +614,7 @@ for i in range(n_events):
                 help="Cash paid upfront (reduces liquid wealth)"
             )
             mortgage_amount = st.number_input(
-                "Mortgage Amount ($)", 
+                f"Mortgage Amount ({currency_symbol})", 
                 min_value=0, 
                 value=400000, 
                 step=25000, 
@@ -274,13 +640,13 @@ for i in range(n_events):
             
             # Show calculated payment
             if mortgage_amount > 0:
-                st.info(f"💡 Calculated payment: ${calculated_new_payment:,.2f}/month based on {mortgage_interest_rate*100:.2f}% rate and {mortgage_amortization} year amortization")
+                st.info(f"💡 Calculated payment: {format_currency(calculated_new_payment, selected_currency)}/month based on {mortgage_interest_rate*100:.2f}% rate and {mortgage_amortization} year amortization")
             
             # Add existing mortgage payment to new one
             total_mortgage_payment = calculated_payment + calculated_new_payment
             
             if initial_mortgage > 0 and calculated_payment > 0:
-                st.caption(f"📋 Total mortgage: ${calculated_payment:,.2f} (existing) + ${calculated_new_payment:,.2f} (new) = ${total_mortgage_payment:,.2f}/month")
+                st.caption(f"📋 Total mortgage: {format_currency(calculated_payment, selected_currency)} (existing) + {format_currency(calculated_new_payment, selected_currency)} (new) = {format_currency(total_mortgage_payment, selected_currency)}/month")
             
             events.append({
                 "type": "property_purchase",
@@ -294,14 +660,14 @@ for i in range(n_events):
             
         elif event_type == "Property Sale":
             sale_price = st.number_input(
-                "Sale Price ($)", 
+                f"Sale Price ({currency_symbol})", 
                 min_value=0, 
                 value=600000, 
                 step=25000, 
                 key=f"sale_price_{i}"
             )
             mortgage_payoff = st.number_input(
-                "Mortgage Payoff ($)", 
+                f"Mortgage Payoff ({currency_symbol})", 
                 min_value=0, 
                 value=350000, 
                 step=25000, 
@@ -309,7 +675,7 @@ for i in range(n_events):
                 help="Mortgage balance paid off from proceeds"
             )
             selling_costs = st.number_input(
-                "Selling Costs ($)", 
+                f"Selling Costs ({currency_symbol})", 
                 min_value=0, 
                 value=30000, 
                 step=5000, 
@@ -327,7 +693,7 @@ for i in range(n_events):
             
         elif event_type == "One-Time Expense":
             expense_amount = st.number_input(
-                "Expense Amount ($)", 
+                f"Expense Amount ({currency_symbol})", 
                 min_value=0, 
                 value=30000, 
                 step=5000, 
@@ -343,7 +709,7 @@ for i in range(n_events):
             
         elif event_type == "Expense Change":
             monthly_change = st.number_input(
-                "Monthly Expense Change ($)", 
+                f"Monthly Expense Change ({currency_symbol})", 
                 value=1000, 
                 step=100, 
                 key=f"monthly_change_{i}",
@@ -358,7 +724,7 @@ for i in range(n_events):
             
         elif event_type == "Rental Income":
             monthly_rental = st.number_input(
-                "Monthly Rental Income ($)", 
+                f"Monthly Rental Income ({currency_symbol})", 
                 min_value=0,
                 value=2000, 
                 step=100, 
@@ -374,7 +740,7 @@ for i in range(n_events):
             
         else:  # Windfall
             windfall_amount = st.number_input(
-                "Windfall Amount ($)", 
+                f"Windfall Amount ({currency_symbol})", 
                 min_value=0, 
                 value=50000, 
                 step=10000, 
@@ -466,7 +832,7 @@ def run_monte_carlo(initial_liquid_wealth, initial_property_value, initial_mortg
         year_pension_contribution = year_gross_income * pension_contribution_rate
         year_take_home = year_gross_income * (1 - effective_tax_rate - pension_contribution_rate)
         year_expenses = current_monthly_expenses * 12 * cumulative_inflation
-        year_mortgage_payment = current_monthly_mortgage * 12 * cumulative_inflation
+        year_mortgage_payment = current_monthly_mortgage * 12  # Fixed nominal payment - NOT inflated
         year_rental_income = current_monthly_rental * 12 * cumulative_inflation
         
         # Calculate available savings (can be negative if overspending)
@@ -717,14 +1083,14 @@ if st.session_state.get('sim_complete', False):
     fig.update_layout(
         title=f"{y_label} Trajectory over 30 Years ({'Real' if show_real else 'Nominal'} Values)",
         xaxis_title="Year",
-        yaxis_title=f"{y_label} ({' Real' if show_real else 'Nominal'} $)",
+        yaxis_title=f"{y_label} ({'Real' if show_real else 'Nominal'} {currency_symbol})",
         hovermode='x unified',
         height=600,
         showlegend=True
     )
     
-    # Format y-axis as currency
-    fig.update_yaxes(tickformat="$,.0f")
+    # Format y-axis as currency with selected symbol
+    fig.update_yaxes(tickprefix=currency_symbol, tickformat=",.0f")
     
     st.plotly_chart(fig, use_container_width=True)
     
@@ -739,10 +1105,10 @@ if st.session_state.get('sim_complete', False):
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric("Median Final Net Worth", f"${np.median(final_net_worth):,.0f}")
+        st.metric("Median Final Net Worth", format_currency(np.median(final_net_worth), selected_currency))
     
     with col2:
-        st.metric("Mean Final Net Worth", f"${np.mean(final_net_worth):,.0f}")
+        st.metric("Mean Final Net Worth", format_currency(np.mean(final_net_worth), selected_currency))
     
     with col3:
         prob_growth = (final_net_worth > initial_net_worth).mean() * 100
@@ -817,15 +1183,55 @@ if st.session_state.get('sim_complete', False):
     fig_composition.update_layout(
         title=f"Median Wealth Components ({'Real' if show_real else 'Nominal'} Values)",
         xaxis_title="Year",
-        yaxis_title=f"Value ({' Real' if show_real else 'Nominal'} $)",
+        yaxis_title=f"Value ({'Real' if show_real else 'Nominal'} {currency_symbol})",
         hovermode='x unified',
         height=400,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
     
-    fig_composition.update_yaxes(tickformat="$,.0f")
+    fig_composition.update_yaxes(tickprefix=currency_symbol, tickformat=",.0f")
     
     st.plotly_chart(fig_composition, use_container_width=True)
+    
+    # Export buttons
+    st.markdown("---")
+    st.subheader("📥 Export Results")
+    col_exp1, col_exp2, col_exp3 = st.columns([1, 1, 3])
+    
+    with col_exp1:
+        # Excel export
+        excel_file = export_to_excel(
+            results, currency_symbol, selected_currency, events,
+            gross_annual_income, monthly_expenses, initial_liquid_wealth,
+            initial_property_value, initial_mortgage
+        )
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        st.download_button(
+            label="📊 Export to Excel",
+            data=excel_file,
+            file_name=f"wealth_simulation_{timestamp}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+            help="Download detailed results as Excel spreadsheet"
+        )
+    
+    with col_exp2:
+        # PDF export - pass both figures
+        pdf_file = export_to_pdf(
+            results, currency_symbol, selected_currency, events, fig, fig_composition,
+            gross_annual_income, monthly_expenses, initial_liquid_wealth,
+            initial_property_value, initial_mortgage
+        )
+        
+        st.download_button(
+            label="📄 Export to PDF",
+            data=pdf_file,
+            file_name=f"wealth_simulation_{timestamp}.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+            help="Download formatted PDF report with charts"
+        )
     
     # Add cash flow summary
     st.subheader("Annual Cash Flow Available for Savings")
@@ -848,21 +1254,21 @@ if st.session_state.get('sim_complete', False):
             'Item': ['Gross Income', '- Pension Contrib', '- Tax', '= Take Home', 
                     '- Living Expenses', '- Mortgage', '= Available for Investment'],
             'Amount': [
-                f"${year1_income:,.0f}",
-                f"${year1_pension:,.0f}",
-                f"${year1_tax:,.0f}",
-                f"${year1_takehome:,.0f}",
-                f"${year1_expenses:,.0f}",
-                f"${year1_mortgage:,.0f}",
-                f"${year1_available:,.0f}"
+                format_currency(year1_income, selected_currency),
+                format_currency(year1_pension, selected_currency),
+                format_currency(year1_tax, selected_currency),
+                format_currency(year1_takehome, selected_currency),
+                format_currency(year1_expenses, selected_currency),
+                format_currency(year1_mortgage, selected_currency),
+                format_currency(year1_available, selected_currency)
             ]
         })
         st.dataframe(cashflow_df, use_container_width=True, hide_index=True)
         
         if year1_available < 0:
-            st.error(f"⚠️ Cash flow deficit: ${abs(year1_available):,.0f}/year")
+            st.error(f"⚠️ Cash flow deficit: {format_currency(abs(year1_available), selected_currency)}/year")
         else:
-            st.success(f"✓ Annual savings: ${year1_available:,.0f} (${year1_available/12:,.0f}/month)")
+            st.success(f"✓ Annual savings: {format_currency(year1_available, selected_currency)} ({format_currency(year1_available/12, selected_currency)}/month)")
     
     with col2:
         st.markdown("**Liquid Wealth Warning Check**")
@@ -872,20 +1278,20 @@ if st.session_state.get('sim_complete', False):
             min_liquid = (np.median(results['liquid_wealth'], axis=0) / inflation_adj).min()
         
         if min_liquid < 0:
-            st.error(f"⚠️ Liquid wealth goes negative!\nMinimum: ${min_liquid:,.0f}")
+            st.error(f"⚠️ Liquid wealth goes negative!\nMinimum: {format_currency(min_liquid, selected_currency)}")
             st.markdown("**Recommendations:**")
             st.markdown("- Reduce monthly expenses")
             st.markdown("- Reduce monthly savings target")
             st.markdown("- Increase income")
             st.markdown("- Review major financial events")
         else:
-            st.success(f"✓ Liquid wealth stays positive\nMinimum: ${min_liquid:,.0f}")
+            st.success(f"✓ Liquid wealth stays positive\nMinimum: {format_currency(min_liquid, selected_currency)}")
             
         # Show final liquid wealth
         final_liquid = np.median(results['liquid_wealth'], axis=0)[-1]
         if show_real:
             final_liquid = final_liquid / inflation_adj[-1]
-        st.metric("Median Final Liquid Wealth", f"${final_liquid:,.0f}")
+        st.metric("Median Final Liquid Wealth", format_currency(final_liquid, selected_currency))
     
     # Add detailed cash flow projection table
     st.subheader("Cash Flow Projection with Financial Events")
@@ -939,12 +1345,12 @@ if st.session_state.get('sim_complete', False):
         
         cashflow_projection.append({
             'Year': year,
-            'Take Home': f"${year_takehome:,.0f}",
-            'Rental Income': f"${year_rental_annual:,.0f}" if year_rental_annual > 0 else "-",
-            'Living Expenses': f"${year_expenses_annual:,.0f}",
-            'Mortgage': f"${year_mortgage_annual:,.0f}",
-            'Available Savings': f"${year_available:,.0f}",
-            'Monthly Savings': f"${year_available/12:,.0f}",
+            'Take Home': format_currency(year_takehome, selected_currency),
+            'Rental Income': format_currency(year_rental_annual, selected_currency) if year_rental_annual > 0 else "-",
+            'Living Expenses': format_currency(year_expenses_annual, selected_currency),
+            'Mortgage': format_currency(year_mortgage_annual, selected_currency),
+            'Available Savings': format_currency(year_available, selected_currency),
+            'Monthly Savings': format_currency(year_available/12, selected_currency),
             'Events This Year': ', '.join(event_notes) if event_notes else '-'
         })
     
@@ -952,7 +1358,7 @@ if st.session_state.get('sim_complete', False):
     
     # Style the dataframe to highlight negative values
     def highlight_negative(val):
-        if isinstance(val, str) and val.startswith('$-'):
+        if isinstance(val, str) and '-' in val and val[0:2] != '--':
             return 'background-color: #ffcccc'
         return ''
     
@@ -990,7 +1396,7 @@ if st.session_state.get('sim_complete', False):
         )
     
     fig_dist.update_layout(height=500, showlegend=False)
-    fig_dist.update_xaxes(tickformat="$,.0f")
+    fig_dist.update_xaxes(tickprefix=currency_symbol, tickformat=",.0f")
     
     st.plotly_chart(fig_dist, use_container_width=True)
     
@@ -1002,11 +1408,11 @@ if st.session_state.get('sim_complete', False):
         year_wealth = paths_to_plot[:, year]
         milestone_data.append({
             'Year': year,
-            '10th': f"${np.percentile(year_wealth, 10):,.0f}",
-            '25th': f"${np.percentile(year_wealth, 25):,.0f}",
-            '50th': f"${np.percentile(year_wealth, 50):,.0f}",
-            '75th': f"${np.percentile(year_wealth, 75):,.0f}",
-            '90th': f"${np.percentile(year_wealth, 90):,.0f}",
+            '10th': format_currency(np.percentile(year_wealth, 10), selected_currency),
+            '25th': format_currency(np.percentile(year_wealth, 25), selected_currency),
+            '50th': format_currency(np.percentile(year_wealth, 50), selected_currency),
+            '75th': format_currency(np.percentile(year_wealth, 75), selected_currency),
+            '90th': format_currency(np.percentile(year_wealth, 90), selected_currency),
         })
     
     st.dataframe(pd.DataFrame(milestone_data), use_container_width=True, hide_index=True)
@@ -1049,21 +1455,21 @@ else:
             'Item': ['Gross Income', '- Pension Contrib', '- Tax', '= Take Home', 
                     '- Living Expenses', '- Mortgage', '= Available for Investment'],
             'Amount': [
-                f"${gross_annual_income:,.0f}",
-                f"${pension_contrib:,.0f}",
-                f"${tax:,.0f}",
-                f"${take_home:,.0f}",
-                f"${annual_expenses_calc:,.0f}",
-                f"${annual_mortgage_calc:,.0f}",
-                f"${annual_available_yr1:,.0f}"
+                format_currency(gross_annual_income, selected_currency),
+                format_currency(pension_contrib, selected_currency),
+                format_currency(tax, selected_currency),
+                format_currency(take_home, selected_currency),
+                format_currency(annual_expenses_calc, selected_currency),
+                format_currency(annual_mortgage_calc, selected_currency),
+                format_currency(annual_available_yr1, selected_currency)
             ]
         })
         st.dataframe(income_df, use_container_width=True, hide_index=True)
         
         if annual_available_yr1 < 0:
-            st.error(f"⚠️ Cash flow deficit: ${abs(annual_available_yr1):,.0f}/year (${abs(annual_available_yr1)/12:,.0f}/month)")
+            st.error(f"⚠️ Cash flow deficit: {format_currency(abs(annual_available_yr1), selected_currency)}/year ({format_currency(abs(annual_available_yr1)/12, selected_currency)}/month)")
         else:
-            st.success(f"✓ Annual savings: ${annual_available_yr1:,.0f} (${annual_available_yr1/12:,.0f}/month)")
+            st.success(f"✓ Annual savings: {format_currency(annual_available_yr1, selected_currency)} ({format_currency(annual_available_yr1/12, selected_currency)}/month)")
     
     with col2:
         if len(future_mortgage_changes) > 0:
@@ -1095,21 +1501,21 @@ else:
                 ],
                 'Amount': [
                     '',
-                    f"${take_home:,.0f}",
-                    f"${annual_expenses_adjusted:,.0f}",
-                    f"${annual_mortgage_new:,.0f}",
-                    f"${annual_available_new:,.0f}"
+                    format_currency(take_home, selected_currency),
+                    format_currency(annual_expenses_adjusted, selected_currency),
+                    format_currency(annual_mortgage_new, selected_currency),
+                    format_currency(annual_available_new, selected_currency)
                 ]
             })
             st.dataframe(event_df, use_container_width=True, hide_index=True)
             
             delta = annual_available_new - annual_available_yr1
             if annual_available_new < 0:
-                st.error(f"⚠️ Cash flow becomes deficit: ${abs(annual_available_new):,.0f}/year")
+                st.error(f"⚠️ Cash flow becomes deficit: {format_currency(abs(annual_available_new), selected_currency)}/year")
             elif delta < 0:
-                st.warning(f"Savings reduced by ${abs(delta):,.0f}/year (${abs(delta)/12:,.0f}/month)")
+                st.warning(f"Savings reduced by {format_currency(abs(delta), selected_currency)}/year ({format_currency(abs(delta)/12, selected_currency)}/month)")
             else:
-                st.success(f"Savings increased by ${delta:,.0f}/year (${delta/12:,.0f}/month)")
+                st.success(f"Savings increased by {format_currency(delta, selected_currency)}/year ({format_currency(delta/12, selected_currency)}/month)")
         else:
             st.markdown("**No Property Events Configured**")
             st.info("Add property purchase or sale events to see how they affect cash flow")
@@ -1119,10 +1525,10 @@ else:
     net_worth_df = pd.DataFrame({
         'Component': ['Liquid Wealth', 'Property Value', 'Mortgage Debt', 'Net Worth'],
         'Amount': [
-            f"${initial_liquid_wealth:,.0f}",
-            f"${initial_property_value:,.0f}",
-            f"-${initial_mortgage:,.0f}",
-            f"${initial_liquid_wealth + initial_property_value - initial_mortgage:,.0f}"
+            format_currency(initial_liquid_wealth, selected_currency),
+            format_currency(initial_property_value, selected_currency),
+            format_currency(-initial_mortgage, selected_currency),
+            format_currency(initial_liquid_wealth + initial_property_value - initial_mortgage, selected_currency)
         ]
     })
     st.dataframe(net_worth_df, use_container_width=True, hide_index=True)
@@ -1133,17 +1539,17 @@ else:
         event_summary = []
         for event in events:
             if event['type'] == 'property_purchase':
-                details = f"Price: ${event['property_price']:,.0f}, Down: ${event['down_payment']:,.0f}, Mortgage: ${event['mortgage_amount']:,.0f}"
+                details = f"Price: {format_currency(event['property_price'], selected_currency)}, Down: {format_currency(event['down_payment'], selected_currency)}, Mortgage: {format_currency(event['mortgage_amount'], selected_currency)}"
             elif event['type'] == 'property_sale':
-                details = f"Sale: ${event['sale_price']:,.0f}, Payoff: ${event['mortgage_payoff']:,.0f}, Costs: ${event['selling_costs']:,.0f}"
+                details = f"Sale: {format_currency(event['sale_price'], selected_currency)}, Payoff: {format_currency(event['mortgage_payoff'], selected_currency)}, Costs: {format_currency(event['selling_costs'], selected_currency)}"
             elif event['type'] == 'one_time_expense':
-                details = f"Expense: ${event['amount']:,.0f}"
+                details = f"Expense: {format_currency(event['amount'], selected_currency)}"
             elif event['type'] == 'expense_change':
-                details = f"Monthly Change: ${event['monthly_change']:+,.0f}"
+                details = f"Monthly Change: {format_currency(event['monthly_change'], selected_currency)}"
             elif event['type'] == 'rental_income':
-                details = f"Monthly Rental: ${event['monthly_rental']:,.0f}"
+                details = f"Monthly Rental: {format_currency(event['monthly_rental'], selected_currency)}"
             elif event['type'] == 'windfall':
-                details = f"Amount: ${event['amount']:,.0f}"
+                details = f"Amount: {format_currency(event['amount'], selected_currency)}"
             else:
                 details = ""
             
