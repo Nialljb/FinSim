@@ -70,7 +70,6 @@ def verify_setup():
     db = SessionLocal()
     try:
         # Count users
-        from test.database import User
         user_count = db.query(User).count()
         print(f"✅ Database accessible. Users in database: {user_count}")
         return True
