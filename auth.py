@@ -6,7 +6,7 @@ Handles user registration, login, and session management
 import bcrypt
 import streamlit as st
 from datetime import datetime
-from test.database import SessionLocal, User, UsageStats
+from database import SessionLocal, User, UsageStats
 
 
 def hash_password(password: str) -> str:

@@ -4,7 +4,7 @@ Saves simulation data to database for analysis
 """
 
 from datetime import datetime
-from test.database import SessionLocal, Simulation, get_wealth_bracket, get_income_bracket, get_age_range
+from database import SessionLocal, Simulation, get_wealth_bracket, get_income_bracket, get_age_range
 
 
 def save_simulation(user_id: int, simulation_params: dict, results: dict = None):

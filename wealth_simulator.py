@@ -15,7 +15,7 @@ import plotly.io as pio
 import streamlit as st
 from auth import initialize_session_state, show_login_page, show_user_header, check_simulation_limit, increment_simulation_count, increment_export_count
 from data_tracking import save_simulation
-from test.database import init_db
+from database import init_db
 # from landing_page import show_landing_page
 from alt_landing_page import show_landing_page
 
