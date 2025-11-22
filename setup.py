@@ -5,7 +5,7 @@ Initializes database and creates first admin user
 """
 
 import sys
-from database import init_db, SessionLocal, User
+from test.database import init_db, SessionLocal, User
 from auth import hash_password
 from datetime import datetime
 
@@ -70,7 +70,7 @@ def verify_setup():
     db = SessionLocal()
     try:
         # Count users
-        from database import User
+        from test.database import User
         user_count = db.query(User).count()
         print(f"✅ Database accessible. Users in database: {user_count}")
         return True

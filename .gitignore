@@ -12,6 +12,9 @@ env/
 *.db-journal
 finsim.db
 docs/
+view_database.py
+exports
+test
 
 # Environment
 .env

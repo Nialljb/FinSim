@@ -4,7 +4,7 @@ Saves simulation data to database for analysis
 """
 
 from datetime import datetime
-from database import SessionLocal, Simulation, get_wealth_bracket, get_income_bracket, get_age_range
+from test.database import SessionLocal, Simulation, get_wealth_bracket, get_income_bracket, get_age_range
 
 
 def save_simulation(user_id: int, simulation_params: dict, results: dict = None):
@@ -40,15 +40,16 @@ def save_simulation(user_id: int, simulation_params: dict, results: dict = None)
         final_net_worth_bracket = None
         probability_of_success = None
         
+        # NEW CODE - Convert numpy types to Python native types:
         if results:
-            final_net_worth = results.get('net_worth', [[0]])[:, -1].mean()
+            final_net_worth = float(results.get('net_worth', [[0]])[:, -1].mean())  # ✅ Added float()
             final_net_worth_bracket = get_wealth_bracket(final_net_worth)
             
             # Calculate probability of growth
             initial_net_worth = results.get('net_worth', [[0]])[:, 0]
             final_values = results.get('net_worth', [[0]])[:, -1]
             if len(initial_net_worth) > 0 and len(final_values) > 0:
-                probability_of_success = (final_values > initial_net_worth[0]).mean()
+                probability_of_success = float((final_values > initial_net_worth[0]).mean())  # ✅ Added float()
         
         # Create simulation record
         simulation = Simulation(
