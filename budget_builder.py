@@ -1,0 +1,508 @@
+"""
+Budget Builder - WORKING VERSION
+All issues fixed: sidebar, template loading, value persistence
+"""
+
+import streamlit as st
+import pandas as pd
+import plotly.graph_objects as go
+from datetime import datetime
+import json
+
+# Budget templates (in Euros)
+BUDGET_TEMPLATES = {
+    'EUR': {
+        '20k-30k': {
+            'Housing': 600,
+            'Utilities': 100,
+            'Groceries': 250,
+            'Transportation': 100,
+            'Healthcare': 50,
+            'Entertainment': 80,
+            'Dining Out': 100,
+            'Personal Care': 40,
+            'Clothing': 60,
+            'Insurance': 60,
+            'Other': 80
+        },
+        '30k-40k': {
+            'Housing': 900,
+            'Utilities': 150,
+            'Groceries': 350,
+            'Transportation': 150,
+            'Healthcare': 80,
+            'Entertainment': 120,
+            'Dining Out': 150,
+            'Personal Care': 60,
+            'Clothing': 90,
+            'Insurance': 90,
+            'Other': 100
+        },
+        '40k-50k': {
+            'Housing': 1200,
+            'Utilities': 180,
+            'Groceries': 450,
+            'Transportation': 200,
+            'Healthcare': 100,
+            'Entertainment': 180,
+            'Dining Out': 250,
+            'Personal Care': 80,
+            'Clothing': 120,
+            'Insurance': 120,
+            'Other': 150
+        },
+        '50k-60k': {
+            'Housing': 1500,
+            'Utilities': 220,
+            'Groceries': 550,
+            'Transportation': 250,
+            'Healthcare': 120,
+            'Entertainment': 250,
+            'Dining Out': 350,
+            'Personal Care': 100,
+            'Clothing': 150,
+            'Insurance': 150,
+            'Other': 200
+        },
+        '60k+': {
+            'Housing': 2000,
+            'Utilities': 280,
+            'Groceries': 650,
+            'Transportation': 350,
+            'Healthcare': 150,
+            'Entertainment': 350,
+            'Dining Out': 500,
+            'Personal Care': 150,
+            'Clothing': 250,
+            'Insurance': 200,
+            'Other': 300
+        }
+    }
+}
+
+PAY_BRACKETS = {
+    '20k-30k': '€20,000 - €30,000',
+    '30k-40k': '€30,000 - €40,000',
+    '40k-50k': '€40,000 - €50,000',
+    '50k-60k': '€50,000 - €60,000',
+    '60k+': '€60,000+'
+}
+
+LIFE_EVENT_IMPACTS = {
+    'property_purchase': {
+        'description': 'Property Purchase',
+        'simulation_type': 'property_purchase',
+        'needs_details': True,
+        'changes': {'Utilities': 100, 'Maintenance': 300, 'Insurance': 100},
+        'one_time_costs': 0,
+        'duration': 30
+    },
+    'property_sale': {
+        'description': 'Property Sale',
+        'simulation_type': 'property_sale',
+        'needs_details': True,
+        'changes': {'Utilities': -100, 'Maintenance': -300, 'Insurance': -100},
+        'one_time_costs': 0,
+        'duration': None
+    },
+    'one_time_expense': {
+        'description': 'One-Time Expense',
+        'simulation_type': 'one_time_expense',
+        'needs_details': True,
+        'changes': {},
+        'one_time_costs': 0,
+        'duration': None
+    },
+    'expense_change': {
+        'description': 'Monthly Expense Change',
+        'simulation_type': 'expense_change',
+        'needs_details': True,
+        'changes': {},
+        'one_time_costs': 0,
+        'duration': None
+    },
+    'rental_income': {
+        'description': 'Rental Income',
+        'simulation_type': 'rental_income',
+        'needs_details': True,
+        'changes': {},
+        'one_time_costs': 0,
+        'duration': None
+    },
+    'windfall': {
+        'description': 'Windfall/Inheritance',
+        'simulation_type': 'windfall',
+        'needs_details': True,
+        'changes': {},
+        'one_time_costs': 0,
+        'duration': None
+    },
+    'first_child': {
+        'description': 'First Child',
+        'simulation_type': 'expense_change',
+        'needs_details': False,
+        'changes': {'Childcare': 1200, 'Groceries': 200, 'Healthcare': 100, 'Utilities': 50, 'Entertainment': -100},
+        'one_time_costs': 5000,
+        'duration': 18
+    },
+    'second_child': {
+        'description': 'Second Child',
+        'simulation_type': 'expense_change',
+        'needs_details': False,
+        'changes': {'Childcare': 800, 'Groceries': 150, 'Healthcare': 80, 'Utilities': 30, 'Housing': 200},
+        'one_time_costs': 3000,
+        'duration': 18
+    }
+}
+
+
+def format_currency(amount, currency_code='EUR'):
+    """Format amount with currency symbol"""
+    CURRENCY_SYMBOLS = {
+        'EUR': '€',
+        'GBP': '£',
+        'USD': '$',
+        'CAD': 'C$',
+        'AUD': 'A$',
+        'NZD': 'NZ$',
+        'CHF': 'CHF',
+        'SEK': 'kr',
+        'NOK': 'kr',
+        'DKK': 'kr',
+        'JPY': '¥',
+        'CNY': '¥',
+        'INR': '₹',
+        'SGD': 'S$',
+        'HKD': 'HK$'
+    }
+    
+    symbol = CURRENCY_SYMBOLS.get(currency_code, '€')
+    
+    if amount < 0:
+        return f"-{symbol}{abs(amount):,.0f}"
+    return f"{symbol}{amount:,.0f}"
+
+
+def show_budget_builder():
+    """Main budget builder interface"""
+    
+    st.title("💰 Budget Builder")
+    st.markdown("Build detailed monthly budgets and plan life events")
+    
+    # Get currency from session state (set by simulation tab)
+    currency_code = st.session_state.get('selected_currency', 'EUR')
+    
+    # Track currency changes for auto-refresh
+    if 'bb_last_currency' not in st.session_state:
+        st.session_state.bb_last_currency = currency_code
+    
+    # If currency changed, update and rerun
+    if st.session_state.bb_last_currency != currency_code:
+        st.session_state.bb_last_currency = currency_code
+        st.rerun()
+    
+    # Define currency symbols
+    CURRENCY_SYMBOLS = {
+        'EUR': '€',
+        'GBP': '£',
+        'USD': '$',
+        'CAD': 'C$',
+        'AUD': 'A$',
+        'NZD': 'NZ$',
+        'CHF': 'CHF',
+        'SEK': 'kr',
+        'NOK': 'kr',
+        'DKK': 'kr',
+        'JPY': '¥',
+        'CNY': '¥',
+        'INR': '₹',
+        'SGD': 'S$',
+        'HKD': 'HK$'
+    }
+    
+    currency_symbol = CURRENCY_SYMBOLS.get(currency_code, '€')
+    
+    # Dynamic pay brackets based on currency
+    PAY_BRACKETS_DISPLAY = {
+        '20k-30k': f'{currency_symbol}20,000 - {currency_symbol}30,000',
+        '30k-40k': f'{currency_symbol}30,000 - {currency_symbol}40,000',
+        '40k-50k': f'{currency_symbol}40,000 - {currency_symbol}50,000',
+        '50k-60k': f'{currency_symbol}50,000 - {currency_symbol}60,000',
+        '60k+': f'{currency_symbol}60,000+'
+    }
+    
+    # Show current currency
+    st.info(f"💱 Using currency: **{currency_code}** ({currency_symbol}). Change in Simulation tab sidebar.")
+    
+    # Debug: Show what's in session state
+    with st.expander("🔍 Debug - Currency Info"):
+        st.write(f"Session state currency: {st.session_state.get('selected_currency', 'Not set')}")
+        st.write(f"Local currency_code: {currency_code}")
+        st.write(f"Local currency_symbol: {currency_symbol}")
+        st.write(f"Test format_currency(1000, '{currency_code}'): {format_currency(1000, currency_code)}")
+    
+    # Initialize session state
+    if 'bb_now' not in st.session_state:
+        st.session_state.bb_now = {}
+    if 'bb_1yr' not in st.session_state:
+        st.session_state.bb_1yr = {}
+    if 'bb_5yr' not in st.session_state:
+        st.session_state.bb_5yr = {}
+    if 'bb_events' not in st.session_state:
+        st.session_state.bb_events = []
+    if 'bb_counter' not in st.session_state:
+        st.session_state.bb_counter = 0
+    
+    # Template selection
+    st.subheader("🎯 Quick Start with Template")
+    
+    col1, col2, col3 = st.columns([2, 1, 1])
+    
+    with col1:
+        pay_bracket = st.selectbox(
+            "Annual Pay Bracket",
+            options=list(PAY_BRACKETS_DISPLAY.keys()),
+            format_func=lambda x: PAY_BRACKETS_DISPLAY[x],
+            key="bb_pay_bracket"
+        )
+    
+    with col2:
+        if st.button("📋 Load Template", use_container_width=True, key="bb_load_btn"):
+            template = BUDGET_TEMPLATES['EUR'][pay_bracket]
+            st.session_state.bb_now = dict(template)
+            st.session_state.bb_1yr = dict(template)
+            st.session_state.bb_5yr = dict(template)
+            st.session_state.bb_counter += 1  # Force widget refresh
+            st.success("✅ Template loaded!")
+            st.rerun()
+    
+    with col3:
+        if st.button("🗑️ Clear All", use_container_width=True, key="bb_clear_btn"):
+            st.session_state.bb_now = {}
+            st.session_state.bb_1yr = {}
+            st.session_state.bb_5yr = {}
+            st.session_state.bb_events = []
+            st.session_state.bb_counter += 1
+            st.success("✅ Cleared!")
+            st.rerun()
+    
+    st.markdown("---")
+    st.subheader("📊 Monthly Budget Timeline")
+    
+    # Get all categories
+    all_categories = set(st.session_state.bb_now.keys()) | set(st.session_state.bb_1yr.keys()) | set(st.session_state.bb_5yr.keys())
+    
+    if not all_categories:
+        for cat in ['Housing', 'Utilities', 'Groceries', 'Transportation', 'Healthcare', 
+                   'Entertainment', 'Dining Out', 'Personal Care', 'Clothing', 'Insurance', 'Other']:
+            st.session_state.bb_now[cat] = 0
+            st.session_state.bb_1yr[cat] = 0
+            st.session_state.bb_5yr[cat] = 0
+        all_categories = set(st.session_state.bb_now.keys())
+    
+    categories_sorted = sorted(all_categories)
+    
+    # Headers
+    col_now, col_1yr, col_5yr = st.columns(3)
+    with col_now:
+        st.markdown("### 📅 Now")
+    with col_1yr:
+        st.markdown("### 📅 1 Year")
+    with col_5yr:
+        st.markdown("### 📅 5 Years")
+    
+    # Build inputs - use counter to force refresh
+    for category in categories_sorted:
+        col_now, col_1yr, col_5yr = st.columns(3)
+        
+        with col_now:
+            val = st.number_input(
+                category,
+                min_value=0,
+                value=int(st.session_state.bb_now.get(category, 0)),
+                step=50,
+                key=f"bb_now_{category}_{st.session_state.bb_counter}"
+            )
+            st.session_state.bb_now[category] = val
+        
+        with col_1yr:
+            val = st.number_input(
+                category,
+                min_value=0,
+                value=int(st.session_state.bb_1yr.get(category, 0)),
+                step=50,
+                key=f"bb_1yr_{category}_{st.session_state.bb_counter}",
+                label_visibility="collapsed"
+            )
+            st.session_state.bb_1yr[category] = val
+        
+        with col_5yr:
+            val = st.number_input(
+                category,
+                min_value=0,
+                value=int(st.session_state.bb_5yr.get(category, 0)),
+                step=50,
+                key=f"bb_5yr_{category}_{st.session_state.bb_counter}",
+                label_visibility="collapsed"
+            )
+            st.session_state.bb_5yr[category] = val
+    
+    # Add custom category
+    st.markdown("---")
+    col_add1, col_add2 = st.columns([3, 1])
+    with col_add1:
+        new_category = st.text_input("Add Custom Category", placeholder="e.g., Pet Care", key="bb_new_cat")
+    with col_add2:
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("➕ Add", use_container_width=True, key="bb_add_cat"):
+            if new_category and new_category not in st.session_state.bb_now:
+                st.session_state.bb_now[new_category] = 0
+                st.session_state.bb_1yr[new_category] = 0
+                st.session_state.bb_5yr[new_category] = 0
+                st.session_state.bb_counter += 1
+                st.success(f"✅ Added {new_category}")
+                st.rerun()
+    
+    # Calculate totals from session state
+    total_now = sum(st.session_state.bb_now.values())
+    total_1yr = sum(st.session_state.bb_1yr.values())
+    total_5yr = sum(st.session_state.bb_5yr.values())
+    
+    st.markdown("---")
+    st.subheader("📈 Budget Summary")
+    
+    sum_col1, sum_col2, sum_col3 = st.columns(3)
+    with sum_col1:
+        st.metric("Now (Monthly)", format_currency(total_now, currency_code))
+        st.caption(f"Annual: {format_currency(total_now * 12, currency_code)}")
+    with sum_col2:
+        delta_1yr = total_1yr - total_now
+        st.metric("1 Year (Monthly)", format_currency(total_1yr, currency_code), 
+                 delta=format_currency(delta_1yr, currency_code))
+        st.caption(f"Annual: {format_currency(total_1yr * 12, currency_code)}")
+    with sum_col3:
+        delta_5yr = total_5yr - total_now
+        st.metric("5 Years (Monthly)", format_currency(total_5yr, currency_code), 
+                 delta=format_currency(delta_5yr, currency_code))
+        st.caption(f"Annual: {format_currency(total_5yr * 12, currency_code)}")
+    
+    # Visualization
+    st.markdown("---")
+    st.subheader("📊 Budget Breakdown")
+    
+    fig = go.Figure()
+    fig.add_trace(go.Bar(name='Now', x=categories_sorted,
+        y=[st.session_state.bb_now.get(cat, 0) for cat in categories_sorted], marker_color='lightblue'))
+    fig.add_trace(go.Bar(name='1 Year', x=categories_sorted,
+        y=[st.session_state.bb_1yr.get(cat, 0) for cat in categories_sorted], marker_color='lightgreen'))
+    fig.add_trace(go.Bar(name='5 Years', x=categories_sorted,
+        y=[st.session_state.bb_5yr.get(cat, 0) for cat in categories_sorted], marker_color='lightcoral'))
+    fig.update_layout(barmode='group', title="Monthly Budget Comparison", 
+                     xaxis_title="Category", yaxis_title=f"Amount ({currency_symbol})", height=400)
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Life Events
+    st.markdown("---")
+    st.subheader("🎯 Financial Events Planning")
+    
+    col_e1, col_e2, col_e3, col_e4 = st.columns([2, 1, 2, 1])
+    
+    with col_e1:
+        event_type = st.selectbox("Event Type", options=list(LIFE_EVENT_IMPACTS.keys()),
+            format_func=lambda x: LIFE_EVENT_IMPACTS[x]['description'], key="bb_event_type")
+    with col_e2:
+        event_year = st.number_input("Year", min_value=0, max_value=30, value=2, key="bb_event_year")
+    with col_e3:
+        event_name = st.text_input("Custom Name", placeholder=LIFE_EVENT_IMPACTS[event_type]['description'], key="bb_event_name")
+    
+    event_config = LIFE_EVENT_IMPACTS[event_type]
+    event_details = {}
+    
+    if event_config['needs_details']:
+        st.markdown("#### Event Details")
+        if event_type == 'property_purchase':
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+                event_details['property_price'] = st.number_input(f"Price ({currency_symbol})", 0, 5000000, 25000, key="bb_prop_price")
+            with c2:
+                event_details['down_payment'] = st.number_input(f"Down ({currency_symbol})", 0, 1000000, 10000, key="bb_down")
+            with c3:
+                event_details['mortgage_amount'] = st.number_input(f"Mortgage ({currency_symbol})", 0, 4000000, 25000, key="bb_mort")
+            with c4:
+                event_details['mortgage_years'] = st.number_input("Years", 1, 35, 25, key="bb_mort_yrs")
+        elif event_type == 'property_sale':
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                event_details['sale_price'] = st.number_input(f"Sale Price ({currency_symbol})", 0, 6000000, 25000, key="bb_sale")
+            with c2:
+                event_details['mortgage_payoff'] = st.number_input(f"Payoff ({currency_symbol})", 0, 3500000, 25000, key="bb_payoff")
+            with c3:
+                event_details['selling_costs'] = st.number_input(f"Costs ({currency_symbol})", 0, 300000, 5000, key="bb_costs")
+        elif event_type == 'one_time_expense':
+            event_details['amount'] = st.number_input(f"Amount ({currency_symbol})", 0, 300000, 5000, key="bb_exp_amt")
+        elif event_type == 'expense_change':
+            event_details['monthly_change'] = st.number_input(f"Monthly Change ({currency_symbol})", value=1000, step=100, key="bb_mon_chg")
+        elif event_type == 'rental_income':
+            event_details['monthly_rental'] = st.number_input(f"Monthly Rental ({currency_symbol})", 0, 20000, 100, key="bb_rental")
+        elif event_type == 'windfall':
+            event_details['amount'] = st.number_input(f"Amount ({currency_symbol})", 0, 500000, 10000, key="bb_wind")
+    
+    with col_e4:
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("➕ Add Event", use_container_width=True, key="bb_add_event"):
+            event = {
+                'type': event_type,
+                'simulation_type': event_config['simulation_type'],
+                'year': event_year,
+                'name': event_name if event_name else event_config['description'],
+                'impacts': event_config,
+                'details': event_details
+            }
+            st.session_state.bb_events.append(event)
+            st.success(f"✅ Added: {event['name']}")
+            st.rerun()
+    
+    # Display events
+    if st.session_state.bb_events:
+        st.markdown("### Planned Financial Events")
+        for idx, event in enumerate(st.session_state.bb_events):
+            c1, c2, c3, c4 = st.columns([1, 3, 3, 1])
+            with c1:
+                st.write(f"**Y{event['year']}**")
+            with c2:
+                st.write(f"**{event['name']}**")
+                st.caption(f"Type: {event['impacts']['description']}")
+            with c3:
+                if event['details']:
+                    details_text = ", ".join([f"{k}: {format_currency(v, currency_code) if isinstance(v, (int, float)) and k != 'mortgage_years' else v}" 
+                                            for k, v in event['details'].items()])
+                    st.write(details_text)
+                else:
+                    monthly_impact = sum(event['impacts']['changes'].values())
+                    st.write(f"Monthly: {format_currency(monthly_impact, currency_code)}")
+            with c4:
+                if st.button("🗑️", key=f"bb_del_{idx}"):
+                    st.session_state.bb_events.pop(idx)
+                    st.rerun()
+    
+    # Integration
+    st.markdown("---")
+    st.subheader("🔗 Use in Simulation")
+    
+    col_int1, col_int2 = st.columns(2)
+    with col_int1:
+        st.metric("Monthly Expenses to Use", format_currency(total_now, currency_code))
+    with col_int2:
+        st.metric("Financial Events", len(st.session_state.bb_events))
+    
+    if st.button("🚀 Go to Simulation with This Budget", type="primary", use_container_width=True, key="bb_go_sim"):
+        # Store in different keys to avoid conflicts
+        st.session_state.use_budget_builder = True
+        st.session_state.budget_monthly_expenses = int(total_now)
+        st.session_state.budget_events_list = [e.copy() for e in st.session_state.bb_events]
+        st.success(f"✅ Budget ready! Monthly: {format_currency(total_now, currency_code)}")
+        st.info("👉 Click the 'Simulation' tab to continue")
+
+
+if __name__ == "__main__":
+    show_budget_builder()

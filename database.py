@@ -152,6 +152,36 @@ class UsageStats(Base):
     def __repr__(self):
         return f"<UsageStats(user_id={self.user_id}, simulations={self.simulations_this_month})>"
 
+class SavedBudget(Base):
+    """Saved budget configurations"""
+    __tablename__ = "saved_budgets"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    
+    # Budget metadata
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    
+    # Budget data (JSON)
+    budget_now = Column(JSON, nullable=False)
+    budget_1yr = Column(JSON, nullable=False)
+    budget_5yr = Column(JSON, nullable=False)
+    
+    # Life events
+    life_events = Column(JSON, nullable=True)
+    
+    # Metadata
+    is_active = Column(Boolean, default=True)
+    is_default = Column(Boolean, default=False)  # User's default budget
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    def __repr__(self):
+        return f"<SavedBudget(id={self.id}, user_id={self.user_id}, name='{self.name}')>"
+
 
 def init_db():
     """Initialize database - create all tables"""
@@ -235,7 +265,107 @@ def get_age_range(age):
     else:
         return "65+"
 
+def save_budget(user_id, name, budget_now, budget_1yr, budget_5yr, life_events=None, description=None):
+    """Save a budget configuration"""
+    db = SessionLocal()
+    try:
+        budget = SavedBudget(
+            user_id=user_id,
+            name=name,
+            description=description,
+            budget_now=budget_now,
+            budget_1yr=budget_1yr,
+            budget_5yr=budget_5yr,
+            life_events=life_events or []
+        )
+        db.add(budget)
+        db.commit()
+        db.refresh(budget)
+        return True, budget.id
+    except Exception as e:
+        db.rollback()
+        return False, str(e)
+    finally:
+        db.close()
 
+
+def get_user_budgets(user_id, limit=10):
+    """Get user's saved budgets"""
+    db = SessionLocal()
+    try:
+        budgets = db.query(SavedBudget).filter(
+            SavedBudget.user_id == user_id,
+            SavedBudget.is_active == True
+        ).order_by(SavedBudget.created_at.desc()).limit(limit).all()
+        return budgets
+    finally:
+        db.close()
+
+
+def get_default_budget(user_id):
+    """Get user's default budget"""
+    db = SessionLocal()
+    try:
+        budget = db.query(SavedBudget).filter(
+            SavedBudget.user_id == user_id,
+            SavedBudget.is_default == True,
+            SavedBudget.is_active == True
+        ).first()
+        return budget
+    finally:
+        db.close()
+
+
+def set_default_budget(user_id, budget_id):
+    """Set a budget as the user's default"""
+    db = SessionLocal()
+    try:
+        # Unset all other defaults
+        db.query(SavedBudget).filter(
+            SavedBudget.user_id == user_id
+        ).update({'is_default': False})
+        
+        # Set new default
+        budget = db.query(SavedBudget).filter(
+            SavedBudget.id == budget_id,
+            SavedBudget.user_id == user_id
+        ).first()
+        
+        if budget:
+            budget.is_default = True
+            db.commit()
+            return True, "Default budget updated"
+        else:
+            return False, "Budget not found"
+    except Exception as e:
+        db.rollback()
+        return False, str(e)
+    finally:
+        db.close()
+
+
+def delete_budget(user_id, budget_id):
+    """Soft delete a budget"""
+    db = SessionLocal()
+    try:
+        budget = db.query(SavedBudget).filter(
+            SavedBudget.id == budget_id,
+            SavedBudget.user_id == user_id
+        ).first()
+        
+        if budget:
+            budget.is_active = False
+            db.commit()
+            return True, "Budget deleted"
+        else:
+            return False, "Budget not found"
+    except Exception as e:
+        db.rollback()
+        return False, str(e)
+    finally:
+        db.close()
+
+        
 if __name__ == "__main__":
     # Initialize database when run directly
     init_db()
