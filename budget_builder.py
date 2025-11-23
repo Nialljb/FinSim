@@ -8,6 +8,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
 import json
+from currency_converter import convert_currency
 
 # Budget templates (in Euros)
 BUDGET_TEMPLATES = {
@@ -268,12 +269,34 @@ def show_budget_builder():
     
     with col2:
         if st.button("📋 Load Template", use_container_width=True, key="bb_load_btn"):
+            # Get EUR template
             template = BUDGET_TEMPLATES['EUR'][pay_bracket]
-            st.session_state.bb_now = dict(template)
-            st.session_state.bb_1yr = dict(template)
-            st.session_state.bb_5yr = dict(template)
+            
+            # Convert template values to selected currency if not EUR
+            if currency_code != 'EUR':
+                converted_template = {}
+                for category, amount in template.items():
+                    try:
+                        # Convert from EUR to selected currency
+                        converted_amount = convert_currency(amount, 'EUR', currency_code)
+                        # Round to nearest integer for cleaner display
+                        converted_template[category] = round(converted_amount)
+                    except Exception as e:
+                        st.warning(f"Error converting {category}: {e}")
+                        converted_template[category] = amount
+                
+                st.session_state.bb_now = converted_template
+                st.session_state.bb_1yr = dict(converted_template)
+                st.session_state.bb_5yr = dict(converted_template)
+                st.success(f"✅ Template loaded and converted to {currency_code}!")
+            else:
+                # EUR - use template as-is
+                st.session_state.bb_now = dict(template)
+                st.session_state.bb_1yr = dict(template)
+                st.session_state.bb_5yr = dict(template)
+                st.success("✅ Template loaded!")
+            
             st.session_state.bb_counter += 1  # Force widget refresh
-            st.success("✅ Template loaded!")
             st.rerun()
     
     with col3:
