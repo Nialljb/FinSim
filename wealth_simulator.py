@@ -1425,7 +1425,7 @@ with tab1:
                 paths_to_plot = paths_to_plot / cumulative_inflation
             y_label = "Liquid Wealth"
         elif view_type == "Property Equity":
-            paths_to_plot = display_results['property_value'] - results['mortgage_balance']
+            paths_to_plot = display_results['property_value'] - display_results['mortgage_balance']
             if show_real:
                 cumulative_inflation = np.cumprod(1 + results['inflation_rates'], axis=1)
                 cumulative_inflation = np.column_stack([np.ones(n_simulations), cumulative_inflation])
@@ -1527,9 +1527,8 @@ with tab1:
         # Key metrics
         st.subheader("Key Statistics")
         
-        net_worth_paths = results['real_net_worth'] if show_real else display_results['net_worth']
+        net_worth_paths = display_results['net_worth']  # Always use display currency
         # Convert results to display currency
-        display_results = convert_simulation_results_to_display(results, selected_currency)
 
         # NOW USE display_results INSTEAD OF results
         final_net_worth = display_results['net_worth'][:, -1]
