@@ -328,7 +328,8 @@ def set_default_budget(user_id, budget_id):
         # Set new default
         budget = db.query(SavedBudget).filter(
             SavedBudget.id == budget_id,
-            SavedBudget.user_id == user_id
+            SavedBudget.user_id == user_id,
+            SavedBudget.is_active 
         ).first()
         
         if budget:
