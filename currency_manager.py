@@ -1,0 +1,371 @@
+"""
+Currency Manager Module
+=======================
+Implements canonical base currency storage to avoid conversion drift.
+
+Design principles:
+1. All amounts stored in EUR (BASE_CURRENCY)
+2. Convert from display currency → BASE on input
+3. Convert from BASE → display currency on output
+4. No repeated multiplications that cause drift
+"""
+
+import streamlit as st
+from typing import Dict, List, Optional
+from currency_converter import get_exchange_rates, convert_currency
+
+# Canonical base currency - all values stored in this currency internally
+BASE_CURRENCY = 'EUR'
+
+# Keys for financial values stored in base currency
+BASE_CURRENCY_KEYS = [
+    'base_liquid_wealth',
+    'base_property_value',
+    'base_mortgage',
+    'base_annual_income',
+    'base_monthly_expenses',
+]
+
+# Display keys (what user sees in widgets)
+DISPLAY_KEYS = [
+    'display_liquid_wealth',
+    'display_property_value', 
+    'display_mortgage',
+    'display_annual_income',
+    'display_monthly_expenses',
+]
+
+
+def initialize_currency_system():
+    """Initialize the currency system in session state"""
+    
+    # Set default currency if not exists
+    if 'selected_currency' not in st.session_state:
+        st.session_state.selected_currency = BASE_CURRENCY
+    
+    # Initialize base currency values (stored in EUR)
+    if 'base_liquid_wealth' not in st.session_state:
+        st.session_state.base_liquid_wealth = 50000.0  # in EUR
+    if 'base_property_value' not in st.session_state:
+        st.session_state.base_property_value = 0.0
+    if 'base_mortgage' not in st.session_state:
+        st.session_state.base_mortgage = 0.0
+    if 'base_annual_income' not in st.session_state:
+        st.session_state.base_annual_income = 60000.0
+    if 'base_monthly_expenses' not in st.session_state:
+        st.session_state.base_monthly_expenses = 2500.0
+    
+    # Initialize currency change tracker
+    if 'previous_currency' not in st.session_state:
+        st.session_state.previous_currency = BASE_CURRENCY
+
+
+def to_base_currency(amount: float, from_currency: str) -> float:
+    """
+    Convert an amount from any currency to base currency (EUR)
+    
+    Args:
+        amount: Amount in source currency
+        from_currency: Source currency code
+        
+    Returns:
+        Amount in base currency (EUR)
+    """
+    if from_currency == BASE_CURRENCY:
+        return float(amount)
+    
+    try:
+        return convert_currency(amount, from_currency, BASE_CURRENCY)
+    except Exception as e:
+        st.error(f"Error converting to base currency: {e}")
+        return float(amount)
+
+
+def from_base_currency(amount: float, to_currency: str) -> float:
+    """
+    Convert an amount from base currency (EUR) to display currency
+    
+    Args:
+        amount: Amount in base currency (EUR)
+        to_currency: Target currency code
+        
+    Returns:
+        Amount in target currency
+    """
+    if to_currency == BASE_CURRENCY:
+        return float(amount)
+    
+    try:
+        return convert_currency(amount, BASE_CURRENCY, to_currency)
+    except Exception as e:
+        st.error(f"Error converting from base currency: {e}")
+        return float(amount)
+
+
+def store_user_input(widget_key: str, base_key: str, value: float, currency: str):
+    """
+    Store user input by converting to base currency
+    
+    Args:
+        widget_key: Key for the widget (not used in base approach but kept for compatibility)
+        base_key: Key for base currency storage
+        value: Amount entered by user
+        currency: Currency the user entered the amount in
+    """
+    # Convert to base and store
+    base_value = to_base_currency(value, currency)
+    st.session_state[base_key] = base_value
+
+
+def get_display_value(base_key: str, display_currency: str) -> float:
+    """
+    Get display value by converting from base currency
+    
+    Args:
+        base_key: Key for base currency value
+        display_currency: Currency to display in
+        
+    Returns:
+        Value in display currency
+    """
+    base_value = st.session_state.get(base_key, 0.0)
+    return from_base_currency(base_value, display_currency)
+
+
+def handle_currency_change(old_currency: str, new_currency: str) -> bool:
+    """
+    Handle currency change - no conversion needed since we store in base
+    Just show a notification to user
+    
+    Args:
+        old_currency: Previous currency
+        new_currency: New currency selected
+        
+    Returns:
+        True if currency was changed, False otherwise
+    """
+    if old_currency == new_currency:
+        return False
+    
+    # Update currency tracker
+    st.session_state.previous_currency = new_currency
+    st.session_state.selected_currency = new_currency
+    
+    # Show success message
+    st.sidebar.success(f"✓ Currency changed: {old_currency} → {new_currency}")
+    st.sidebar.info("All amounts automatically converted using current exchange rates")
+    
+    return True
+
+
+def convert_events_to_base(events: List[Dict], from_currency: str) -> List[Dict]:
+    """
+    Convert financial events to base currency
+    
+    Args:
+        events: List of event dictionaries
+        from_currency: Source currency
+        
+    Returns:
+        Events with amounts converted to base currency
+    """
+    converted_events = []
+    
+    for event in events:
+        event_copy = event.copy()
+        
+        # Convert amounts based on event type
+        if event['type'] == 'property_purchase':
+            event_copy['property_price'] = to_base_currency(event['property_price'], from_currency)
+            event_copy['down_payment'] = to_base_currency(event['down_payment'], from_currency)
+            event_copy['mortgage_amount'] = to_base_currency(event['mortgage_amount'], from_currency)
+            event_copy['new_mortgage_payment'] = to_base_currency(event['new_mortgage_payment'], from_currency)
+            
+        elif event['type'] == 'property_sale':
+            event_copy['sale_price'] = to_base_currency(event['sale_price'], from_currency)
+            event_copy['mortgage_payoff'] = to_base_currency(event['mortgage_payoff'], from_currency)
+            event_copy['selling_costs'] = to_base_currency(event['selling_costs'], from_currency)
+            
+        elif event['type'] == 'one_time_expense':
+            event_copy['amount'] = to_base_currency(event['amount'], from_currency)
+            
+        elif event['type'] == 'expense_change':
+            event_copy['monthly_change'] = to_base_currency(event['monthly_change'], from_currency)
+            
+        elif event['type'] == 'rental_income':
+            event_copy['monthly_rental'] = to_base_currency(event['monthly_rental'], from_currency)
+            
+        elif event['type'] == 'windfall':
+            event_copy['amount'] = to_base_currency(event['amount'], from_currency)
+        
+        converted_events.append(event_copy)
+    
+    return converted_events
+
+
+def convert_events_from_base(events: List[Dict], to_currency: str) -> List[Dict]:
+    """
+    Convert financial events from base currency to display currency
+    Used for exports and display
+    
+    Args:
+        events: List of event dictionaries in base currency
+        to_currency: Target currency for display
+        
+    Returns:
+        Events with amounts converted to target currency
+    """
+    converted_events = []
+    
+    for event in events:
+        event_copy = event.copy()
+        
+        # Convert amounts based on event type
+        if event['type'] == 'property_purchase':
+            event_copy['property_price'] = from_base_currency(event['property_price'], to_currency)
+            event_copy['down_payment'] = from_base_currency(event['down_payment'], to_currency)
+            event_copy['mortgage_amount'] = from_base_currency(event['mortgage_amount'], to_currency)
+            event_copy['new_mortgage_payment'] = from_base_currency(event['new_mortgage_payment'], to_currency)
+            
+        elif event['type'] == 'property_sale':
+            event_copy['sale_price'] = from_base_currency(event['sale_price'], to_currency)
+            event_copy['mortgage_payoff'] = from_base_currency(event['mortgage_payoff'], to_currency)
+            event_copy['selling_costs'] = from_base_currency(event['selling_costs'], to_currency)
+            
+        elif event['type'] == 'one_time_expense':
+            event_copy['amount'] = from_base_currency(event['amount'], to_currency)
+            
+        elif event['type'] == 'expense_change':
+            event_copy['monthly_change'] = from_base_currency(event['monthly_change'], to_currency)
+            
+        elif event['type'] == 'rental_income':
+            event_copy['monthly_rental'] = from_base_currency(event['monthly_rental'], to_currency)
+            
+        elif event['type'] == 'windfall':
+            event_copy['amount'] = from_base_currency(event['amount'], to_currency)
+        
+        converted_events.append(event_copy)
+    
+    return converted_events
+
+
+def get_exchange_rate_display(base_amount: float = 1.0) -> str:
+    """
+    Get a display string showing exchange rate
+    
+    Args:
+        base_amount: Amount in base currency to show conversion for
+        
+    Returns:
+        Formatted string showing exchange rate
+    """
+    current_currency = st.session_state.get('selected_currency', BASE_CURRENCY)
+    
+    if current_currency == BASE_CURRENCY:
+        return f"{BASE_CURRENCY} is the base currency"
+    
+    try:
+        converted = from_base_currency(base_amount, current_currency)
+        return f"€{base_amount:,.0f} = {converted:,.2f} {current_currency}"
+    except:
+        return "Exchange rate unavailable"
+
+
+def validate_exchange_rates() -> Dict[str, str]:
+    """
+    Validate that exchange rates are available
+    
+    Returns:
+        Dictionary with status and message
+    """
+    try:
+        rates = get_exchange_rates()
+        if not rates:
+            return {
+                'status': 'error',
+                'message': 'Exchange rates unavailable. Using EUR as default.'
+            }
+        return {
+            'status': 'success',
+            'message': f'Exchange rates loaded: {len(rates)} currency pairs available'
+        }
+    except Exception as e:
+        return {
+            'status': 'error',
+            'message': f'Error loading exchange rates: {str(e)}'
+        }
+
+
+def convert_simulation_results_to_display(results: Dict, to_currency: str) -> Dict:
+    """
+    Convert simulation results from base currency to display currency
+    
+    Args:
+        results: Simulation results dictionary with numpy arrays
+        to_currency: Target display currency
+        
+    Returns:
+        Results converted to target currency
+    """
+    if to_currency == BASE_CURRENCY:
+        return results
+    
+    try:
+        converted_results = {}
+        conversion_factor = from_base_currency(1.0, to_currency)
+        
+        # Convert all monetary arrays
+        for key in ['net_worth', 'real_net_worth', 'liquid_wealth', 
+                    'pension_wealth', 'property_value', 'mortgage_balance']:
+            if key in results:
+                converted_results[key] = results[key] * conversion_factor
+        
+        # Keep non-monetary data as-is
+        if 'inflation_rates' in results:
+            converted_results['inflation_rates'] = results['inflation_rates']
+        
+        return converted_results
+    except Exception as e:
+        st.error(f"Error converting simulation results: {e}")
+        return results
+
+
+def create_currency_info_widget():
+    """Create an expander widget showing current currency info and exchange rates"""
+    with st.sidebar.expander("💱 Currency Information"):
+        current_currency = st.session_state.get('selected_currency', BASE_CURRENCY)
+        
+        st.markdown(f"**Current Currency:** {current_currency}")
+        st.markdown(f"**Base Currency:** {BASE_CURRENCY}")
+        
+        if current_currency != BASE_CURRENCY:
+            st.markdown("---")
+            st.markdown("**Sample Conversions:**")
+            
+            # Show some sample conversions
+            for amount in [1000, 10000, 100000]:
+                display_amount = from_base_currency(amount, current_currency)
+                st.markdown(f"€{amount:,} = {display_amount:,.0f} {current_currency}")
+        
+        st.markdown("---")
+        validation = validate_exchange_rates()
+        
+        if validation['status'] == 'success':
+            st.success(validation['message'])
+        else:
+            st.warning(validation['message'])
+
+
+# Debug utility
+def show_debug_info():
+    """Show debug information about currency state (for development)"""
+    if st.sidebar.checkbox("🐛 Show Debug Info", value=False):
+        with st.sidebar.expander("Debug: Currency State"):
+            st.write("**Base Currency Values (EUR):**")
+            for key in BASE_CURRENCY_KEYS:
+                value = st.session_state.get(key, 0)
+                st.write(f"{key}: €{value:,.2f}")
+            
+            st.write("**Display Settings:**")
+            st.write(f"Selected: {st.session_state.get('selected_currency', 'N/A')}")
+            st.write(f"Previous: {st.session_state.get('previous_currency', 'N/A')}")
