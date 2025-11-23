@@ -574,8 +574,8 @@ def run_monte_carlo(initial_liquid_wealth, initial_property_value, initial_mortg
     mortgage_balance_paths = np.zeros((n_simulations, years + 1))
     pension_wealth_paths = np.zeros((n_simulations, years + 1))
     
-    monthly_expenses_tracker = np.full((n_simulations, years + 1), monthly_expenses)
-    monthly_mortgage_tracker = np.full((n_simulations, years + 1), monthly_mortgage_payment)
+    monthly_expenses_tracker = np.full((n_simulations, years + 1), monthly_expenses, dtype=float)
+    monthly_mortgage_tracker = np.full((n_simulations, years + 1), monthly_mortgage_payment, dtype=float)
     monthly_rental_tracker = np.zeros((n_simulations, years + 1))
     
     liquid_wealth_paths[:, 0] = initial_liquid_wealth
