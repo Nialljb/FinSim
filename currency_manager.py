@@ -17,6 +17,44 @@ from currency_converter import get_exchange_rates, convert_currency
 # Canonical base currency - all values stored in this currency internally
 BASE_CURRENCY = 'EUR'
 
+# Currency symbols for display formatting
+CURRENCY_SYMBOLS = {
+    'EUR': '€',
+    'GBP': '£',
+    'USD': '$',
+    'CAD': 'C$',
+    'AUD': 'A$',
+    'NZD': 'NZ$',
+    'CHF': 'CHF',
+    'SEK': 'kr',
+    'NOK': 'kr',
+    'DKK': 'kr',
+    'JPY': '¥',
+    'CNY': '¥',
+    'INR': '₹',
+    'SGD': 'S$',
+    'HKD': 'HK$'
+}
+
+
+def format_currency(amount, currency_code='EUR'):
+    """
+    Format amount with appropriate currency symbol
+    
+    Args:
+        amount: Numeric amount to format
+        currency_code: Currency code (e.g., 'EUR', 'USD')
+        
+    Returns:
+        Formatted string with currency symbol and thousands separator
+    """
+    symbol = CURRENCY_SYMBOLS.get(currency_code, '€')
+    
+    if amount < 0:
+        return f"-{symbol}{abs(amount):,.0f}"
+    return f"{symbol}{amount:,.0f}"
+
+
 # Keys for financial values stored in base currency
 BASE_CURRENCY_KEYS = [
     'base_liquid_wealth',

@@ -25,6 +25,7 @@ from currency_manager import (
     initialize_currency_system,
     to_base_currency,
     from_base_currency,
+    format_currency,
     get_display_value,
     handle_currency_change,
     convert_events_to_base,
@@ -105,15 +106,7 @@ CURRENCIES = {
     'HKD': {'symbol': 'HK$', 'name': 'Hong Kong Dollar', 'locale': 'zh_HK'},
 }
 
-# Helper function to format currency
-def format_currency(amount, currency_code):
-    """Format amount with appropriate currency symbol"""
-    symbol = CURRENCIES[currency_code]['symbol']
-    if amount < 0:
-        return f"-{symbol}{abs(amount):,.0f}"
-    return f"{symbol}{amount:,.0f}"
-
-
+# Helper function for Excel export
 def export_to_excel(results, currency_symbol, selected_currency, events, 
                     gross_annual_income, monthly_expenses, initial_liquid_wealth,
                     initial_property_value, initial_mortgage):

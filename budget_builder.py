@@ -9,6 +9,7 @@ import plotly.graph_objects as go
 from datetime import datetime
 import json
 from currency_converter import convert_currency
+from currency_manager import format_currency
 
 # Budget templates (in Euros)
 BUDGET_TEMPLATES = {
@@ -155,33 +156,6 @@ LIFE_EVENT_IMPACTS = {
         'duration': 18
     }
 }
-
-
-def format_currency(amount, currency_code='EUR'):
-    """Format amount with currency symbol"""
-    CURRENCY_SYMBOLS = {
-        'EUR': '€',
-        'GBP': '£',
-        'USD': '$',
-        'CAD': 'C$',
-        'AUD': 'A$',
-        'NZD': 'NZ$',
-        'CHF': 'CHF',
-        'SEK': 'kr',
-        'NOK': 'kr',
-        'DKK': 'kr',
-        'JPY': '¥',
-        'CNY': '¥',
-        'INR': '₹',
-        'SGD': 'S$',
-        'HKD': 'HK$'
-    }
-    
-    symbol = CURRENCY_SYMBOLS.get(currency_code, '€')
-    
-    if amount < 0:
-        return f"-{symbol}{abs(amount):,.0f}"
-    return f"{symbol}{amount:,.0f}"
 
 
 def show_budget_builder():
