@@ -718,6 +718,8 @@ with tab1:
         st.session_state.budget_monthly_expenses = None
     if 'budget_events_list' not in st.session_state:
         st.session_state.budget_events_list = []
+    if 'budget_currency' not in st.session_state:
+        st.session_state.budget_currency = 'EUR'  # Default to EUR if not set
     if 'selected_currency' not in st.session_state:
         st.session_state.selected_currency = 'EUR'
     
@@ -941,8 +943,9 @@ with tab1:
     if st.session_state.get('use_budget_builder', False):
         budget_value = st.session_state.get('budget_monthly_expenses', None)
         if budget_value is not None and budget_value > 0:
-            # Convert budget value to base if it's in current currency
-            base_budget = to_base_currency(budget_value, selected_currency)
+            # Convert budget value to base using the currency it was created in
+            budget_currency = st.session_state.get('budget_currency', 'EUR')
+            base_budget = to_base_currency(budget_value, budget_currency)
             st.session_state.base_monthly_expenses = base_budget
             display_expenses = from_base_currency(base_budget, selected_currency)
             st.sidebar.success(f"💡 Using Budget Builder: {format_currency(display_expenses, selected_currency)}")
@@ -1045,6 +1048,13 @@ with tab1:
     events = []
     budget_events_list = st.session_state.get('budget_events_list', [])
 
+    # Helper function to convert event monetary values to base currency
+    def convert_event_value_to_base(value, event_currency='EUR'):
+        """Convert a monetary value from event's currency to base currency (EUR)"""
+        if event_currency == 'EUR':
+            return value
+        return to_base_currency(value, event_currency)
+
     if budget_events_list:
         use_budget_events = st.sidebar.checkbox(
             f"✨ Use {len(budget_events_list)} events from Budget Builder",
@@ -1063,10 +1073,15 @@ with tab1:
                 year = budget_event['year']
                 name = budget_event['name']
                 details = budget_event.get('details', {})
+                event_currency = budget_event.get('currency', 'EUR')  # Get event's currency
                 
                 if event_type == 'property_purchase':
-                    new_payment = calculate_mortgage_payment(
+                    mortgage_amount = convert_event_value_to_base(
                         details.get('mortgage_amount', 400000),
+                        event_currency
+                    )
+                    new_payment = calculate_mortgage_payment(
+                        mortgage_amount,
                         mortgage_interest_rate,
                         details.get('mortgage_years', 25)
                     )
@@ -1074,9 +1089,15 @@ with tab1:
                         'type': 'property_purchase',
                         'year': year,
                         'name': name,
-                        'property_price': details.get('property_price', 500000),
-                        'down_payment': details.get('down_payment', 100000),
-                        'mortgage_amount': details.get('mortgage_amount', 400000),
+                        'property_price': convert_event_value_to_base(
+                            details.get('property_price', 500000),
+                            event_currency
+                        ),
+                        'down_payment': convert_event_value_to_base(
+                            details.get('down_payment', 100000),
+                            event_currency
+                        ),
+                        'mortgage_amount': mortgage_amount,
                         'new_mortgage_payment': calculated_payment + new_payment
                     })
                 
@@ -1085,9 +1106,18 @@ with tab1:
                         'type': 'property_sale',
                         'year': year,
                         'name': name,
-                        'sale_price': details.get('sale_price', 600000),
-                        'mortgage_payoff': details.get('mortgage_payoff', 350000),
-                        'selling_costs': details.get('selling_costs', 30000)
+                        'sale_price': convert_event_value_to_base(
+                            details.get('sale_price', 600000),
+                            event_currency
+                        ),
+                        'mortgage_payoff': convert_event_value_to_base(
+                            details.get('mortgage_payoff', 350000),
+                            event_currency
+                        ),
+                        'selling_costs': convert_event_value_to_base(
+                            details.get('selling_costs', 30000),
+                            event_currency
+                        )
                     })
                 
                 elif event_type == 'one_time_expense':
@@ -1095,7 +1125,10 @@ with tab1:
                         'type': 'one_time_expense',
                         'year': year,
                         'name': name,
-                        'amount': details.get('amount', 30000)
+                        'amount': convert_event_value_to_base(
+                            details.get('amount', 30000),
+                            event_currency
+                        )
                     })
                 
                 elif event_type == 'expense_change':
@@ -1107,7 +1140,10 @@ with tab1:
                         'type': 'expense_change',
                         'year': year,
                         'name': name,
-                        'monthly_change': monthly_change
+                        'monthly_change': convert_event_value_to_base(
+                            monthly_change,
+                            event_currency
+                        )
                     })
                     
                     if budget_event['impacts']['one_time_costs'] > 0:
@@ -1115,7 +1151,10 @@ with tab1:
                             'type': 'one_time_expense',
                             'year': year,
                             'name': f"{name} - Initial Costs",
-                            'amount': budget_event['impacts']['one_time_costs']
+                            'amount': convert_event_value_to_base(
+                                budget_event['impacts']['one_time_costs'],
+                                event_currency
+                            )
                         })
                 
                 elif event_type == 'rental_income':
@@ -1123,7 +1162,10 @@ with tab1:
                         'type': 'rental_income',
                         'year': year,
                         'name': name,
-                        'monthly_rental': details.get('monthly_rental', 2000)
+                        'monthly_rental': convert_event_value_to_base(
+                            details.get('monthly_rental', 2000),
+                            event_currency
+                        )
                     })
                 
                 elif event_type == 'windfall':
@@ -1131,7 +1173,10 @@ with tab1:
                         'type': 'windfall',
                         'year': year,
                         'name': name,
-                        'amount': details.get('amount', 50000)
+                        'amount': convert_event_value_to_base(
+                            details.get('amount', 50000),
+                            event_currency
+                        )
                     })
 
     # Manual events

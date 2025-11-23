@@ -479,7 +479,8 @@ def show_budget_builder():
                 'year': event_year,
                 'name': event_name if event_name else event_config['description'],
                 'impacts': event_config,
-                'details': event_details
+                'details': event_details,
+                'currency': currency_code  # Store the currency this event was created in
             }
             st.session_state.bb_events.append(event)
             st.success(f"✅ Added: {event['name']}")
@@ -522,6 +523,7 @@ def show_budget_builder():
         # Store in different keys to avoid conflicts
         st.session_state.use_budget_builder = True
         st.session_state.budget_monthly_expenses = int(total_now)
+        st.session_state.budget_currency = currency_code  # Store the currency the budget was created in
         st.session_state.budget_events_list = [e.copy() for e in st.session_state.bb_events]
         st.success(f"✅ Budget ready! Monthly: {format_currency(total_now, currency_code)}")
         st.info("👉 Click the 'Simulation' tab to continue")
