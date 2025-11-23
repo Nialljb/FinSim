@@ -267,9 +267,8 @@ def get_exchange_rate_display(base_amount: float = 1.0) -> str:
     try:
         converted = from_base_currency(base_amount, current_currency)
         return f"€{base_amount:,.0f} = {converted:,.2f} {current_currency}"
-    except:
+    except Exception:
         return "Exchange rate unavailable"
-
 
 def validate_exchange_rates() -> Dict[str, str]:
     """
