@@ -1356,6 +1356,7 @@ with tab1:
             st.session_state['retirement_age'] = retirement_age
             st.session_state['simulation_years'] = simulation_years
             st.session_state['base_events'] = base_events
+            st.session_state['monthly_mortgage_payment'] = calculated_payment
             
             if st.session_state.get('authenticated', False):
                 increment_simulation_count(st.session_state.user_id)
@@ -1694,9 +1695,68 @@ with tab1:
                 )
                 st.caption("⚠️ PDF unavailable - use Excel export")
 
-        # Rest of the results display code continues here...
-        # (I'm truncating for length but the rest remains the same)
+
+        # Add cash flow summary
+        st.subheader("Annual Cash Flow Available for Savings")
         
+        # Calculate median available cash flow over time
+        # We need to recalculate this based on the simulation parameters
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**Current Year 1 Cash Flow**")
+            year1_income = gross_annual_income
+            year1_pension = year1_income * pension_contribution_rate
+            year1_tax = year1_income * effective_tax_rate
+            year1_takehome = year1_income - year1_pension - year1_tax
+            year1_expenses = monthly_expenses * 12
+            year1_mortgage = st.session_state.get('monthly_mortgage_payment', 0) * 12
+            year1_available = year1_takehome - year1_expenses - year1_mortgage
+            
+            cashflow_df = pd.DataFrame({
+                'Item': ['Gross Income', '- Pension Contrib', '- Tax', '= Take Home', 
+                        '- Living Expenses', '- Mortgage', '= Available for Investment'],
+                'Amount': [
+                    format_currency(year1_income, selected_currency),
+                    format_currency(year1_pension, selected_currency),
+                    format_currency(year1_tax, selected_currency),
+                    format_currency(year1_takehome, selected_currency),
+                    format_currency(year1_expenses, selected_currency),
+                    format_currency(year1_mortgage, selected_currency),
+                    format_currency(year1_available, selected_currency)
+                ]
+            })
+            st.dataframe(cashflow_df, use_container_width=True, hide_index=True)
+            
+            if year1_available < 0:
+                st.error(f"⚠️ Cash flow deficit: {format_currency(abs(year1_available), selected_currency)}/year")
+            else:
+                st.success(f"✓ Annual savings: {format_currency(year1_available, selected_currency)} ({format_currency(year1_available/12, selected_currency)}/month)")
+        
+        with col2:
+            st.markdown("**Liquid Wealth Warning Check**")
+            min_liquid = np.median(results['liquid_wealth'], axis=0).min()
+            if show_real:
+                inflation_adj = np.concatenate([[1], np.cumprod(1 + np.median(results['inflation_rates'], axis=0))])
+                min_liquid = (np.median(results['liquid_wealth'], axis=0) / inflation_adj).min()
+            
+            if min_liquid < 0:
+                st.error(f"⚠️ Liquid wealth goes negative!\nMinimum: {format_currency(min_liquid, selected_currency)}")
+                st.markdown("**Recommendations:**")
+                st.markdown("- Reduce monthly expenses")
+                st.markdown("- Reduce monthly savings target")
+                st.markdown("- Increase income")
+                st.markdown("- Review major financial events")
+            else:
+                st.success(f"✓ Liquid wealth stays positive\nMinimum: {format_currency(min_liquid, selected_currency)}")
+                
+            # Show final liquid wealth
+            final_liquid = np.median(results['liquid_wealth'], axis=0)[-1]
+            if show_real:
+                final_liquid = final_liquid / inflation_adj[-1]
+            st.metric("Median Final Liquid Wealth", format_currency(final_liquid, selected_currency))
+    
+
         st.subheader(f"Net Worth by Age Milestones")
         
         milestone_years = [5, 10, 15, 20, 25, 30]
@@ -1719,6 +1779,194 @@ with tab1:
         
         milestone_df = pd.DataFrame(milestone_data)
         st.dataframe(milestone_df, use_container_width=True, hide_index=True)
+
+        # Annual Cash Flow Summary
+        st.markdown("---")
+        st.subheader("Annual Cash Flow Summary")
+        
+        # Calculate Year 1 cash flow
+        pension_contrib = gross_annual_income * pension_contribution_rate
+        tax = gross_annual_income * effective_tax_rate
+        take_home = gross_annual_income - pension_contrib - tax
+        annual_expenses_calc = monthly_expenses * 12
+        annual_mortgage_calc = calculated_payment * 12
+        annual_available_yr1 = take_home - annual_expenses_calc - annual_mortgage_calc
+        
+        # Check for property events that will change mortgage payments
+        future_mortgage_changes = []
+        for event in events:
+            if event.get('type') == 'property_purchase':
+                future_mortgage_changes.append({
+                    'year': event['year'],
+                    'new_payment': event['new_mortgage_payment'],
+                    'description': event['name']
+                })
+            elif event.get('type') == 'property_sale':
+                future_mortgage_changes.append({
+                    'year': event['year'],
+                    'new_payment': 0,
+                    'description': event['name']
+                })
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.metric(
+                "Year 1 Net Income",
+                format_currency(take_home, selected_currency),
+                help="Gross income minus taxes and pension contributions"
+            )
+            st.metric(
+                "Year 1 Total Expenses",
+                format_currency(annual_expenses_calc + annual_mortgage_calc, selected_currency),
+                help="Living expenses plus mortgage payments"
+            )
+            
+        with col2:
+            st.metric(
+                "Year 1 Available Savings",
+                format_currency(annual_available_yr1, selected_currency),
+                delta=f"{(annual_available_yr1/take_home*100):.1f}% of take-home" if take_home > 0 else None,
+                help="Amount available to save/invest after all expenses"
+            )
+            
+            if future_mortgage_changes:
+                st.info(f"📅 {len(future_mortgage_changes)} property event(s) will change mortgage payments")
+        
+        # Cash Flow Projection with Financial Events
+        st.markdown("---")
+        st.subheader("Cash Flow Projection with Financial Events")
+        
+        # Build year-by-year cash flow projection
+        # First 10 years: every year, then 5-year intervals
+        max_projection_year = min(simulation_years, 30)
+        projection_years = list(range(0, min(11, max_projection_year + 1)))
+        if max_projection_year > 10:
+            projection_years += [y for y in [15, 20, 25, 30] if y <= max_projection_year]
+        
+        cashflow_projection = []
+        
+        for year in projection_years:
+            # Apply all events up to this year
+            year_monthly_expenses = monthly_expenses
+            year_monthly_mortgage = calculated_payment
+            year_monthly_rental = 0
+            event_notes = []
+            
+            # Convert events from base to display currency for this calculation
+            display_events = convert_events_from_base(base_events, selected_currency)
+            
+            for event in display_events:
+                if event['year'] <= year:
+                    if event['type'] == 'property_purchase':
+                        year_monthly_mortgage = event['new_mortgage_payment']
+                        if event['year'] == year:
+                            event_notes.append(f"🏠 {event['name']}")
+                    elif event['type'] == 'property_sale':
+                        year_monthly_mortgage = 0
+                        if event['year'] == year:
+                            event_notes.append(f"💰 {event['name']}")
+                    elif event['type'] == 'expense_change':
+                        year_monthly_expenses += event['monthly_change']
+                        if event['year'] == year:
+                            event_notes.append(f"📊 {event['name']}")
+                    elif event['type'] == 'rental_income':
+                        year_monthly_rental += event['monthly_rental']
+                        if event['year'] == year:
+                            event_notes.append(f"🏘️ {event['name']}")
+                    elif event['type'] == 'one_time_expense' and event['year'] == year:
+                        event_notes.append(f"💸 {event['name']}")
+                    elif event['type'] == 'windfall' and event['year'] == year:
+                        event_notes.append(f"💵 {event['name']}")
+            
+            # Calculate cash flow (with salary inflation)
+            cumulative_salary_growth = (1 + salary_inflation) ** year
+            year_income = gross_annual_income * cumulative_salary_growth
+            year_pension = year_income * pension_contribution_rate
+            year_tax = year_income * effective_tax_rate
+            year_takehome = year_income - year_pension - year_tax
+            year_rental_annual = year_monthly_rental * 12
+            year_expenses_annual = year_monthly_expenses * 12
+            year_mortgage_annual = year_monthly_mortgage * 12
+            year_available = year_takehome + year_rental_annual - year_expenses_annual - year_mortgage_annual
+            
+            cashflow_projection.append({
+                'Year': year,
+                'Age': starting_age + year,
+                'Take Home': format_currency(year_takehome, selected_currency),
+                'Rental Income': format_currency(year_rental_annual, selected_currency) if year_rental_annual > 0 else "-",
+                'Living Expenses': format_currency(year_expenses_annual, selected_currency),
+                'Mortgage': format_currency(year_mortgage_annual, selected_currency) if year_mortgage_annual > 0 else "-",
+                'Available Savings': format_currency(year_available, selected_currency),
+                'Monthly Savings': format_currency(year_available/12, selected_currency),
+                'Events This Year': ', '.join(event_notes) if event_notes else '-'
+            })
+        
+        projection_df = pd.DataFrame(cashflow_projection)
+        
+        # Style the dataframe to highlight negative values
+        def highlight_negative(val):
+            if isinstance(val, str) and val.startswith('-') and not val.startswith('--'):
+                try:
+                    # Check if it's a negative currency value
+                    if any(symbol in val for symbol in ['€', '$', '£', 'C$', 'A$', 'NZ$', 'S$', 'HK$', 'CHF', 'kr', '¥', '₹']):
+                        return 'background-color: #ffcccc'
+                except:
+                    pass
+            return ''
+        
+        st.dataframe(
+            projection_df.style.applymap(highlight_negative, subset=['Available Savings', 'Monthly Savings']),
+            use_container_width=True,
+            hide_index=True
+        )
+        
+        st.caption("💡 Take-home income grows with salary inflation. Expenses and mortgage shown in nominal dollars (not inflation-adjusted).")
+        st.caption("📝 Events: 🏠 Property Purchase, 💰 Property Sale, 📊 Expense Change, 🏘️ Rental Income, 💸 One-Time Expense, 💵 Windfall")
+        
+        # Distribution at key years
+        st.markdown("---")
+        st.subheader("Wealth Distribution at Key Milestones")
+        
+        milestone_years_dist = [y for y in [5, 10, 15, 20, 25, 30] if y <= simulation_years]
+        
+        if len(milestone_years_dist) >= 3:
+            n_rows = 2
+            n_cols = 3
+        elif len(milestone_years_dist) >= 2:
+            n_rows = 1
+            n_cols = len(milestone_years_dist)
+        else:
+            n_rows = 1
+            n_cols = 1
+        
+        fig_dist = make_subplots(
+            rows=n_rows, cols=n_cols,
+            subplot_titles=[f"Year {y} (Age {starting_age + y})" for y in milestone_years_dist[:n_rows*n_cols]]
+        )
+        
+        for idx, year in enumerate(milestone_years_dist[:n_rows*n_cols]):
+            row = idx // n_cols + 1
+            col = idx % n_cols + 1
+            
+            if year < paths_to_plot.shape[1]:
+                fig_dist.add_trace(
+                    go.Histogram(
+                        x=paths_to_plot[:, year],
+                        nbinsx=50,
+                        name=f"Year {year}",
+                        showlegend=False,
+                        marker_color='rgba(31, 119, 180, 0.7)'
+                    ),
+                    row=row, col=col
+                )
+        
+        fig_dist.update_layout(height=400 if n_rows == 1 else 600, showlegend=False)
+        fig_dist.update_xaxes(tickprefix=currency_symbol, tickformat=",.0f")
+        fig_dist.update_yaxes(title_text="Frequency")
+        
+        st.plotly_chart(fig_dist, use_container_width=True)
+
 
     else:
         st.info("👈 Set your parameters in the sidebar and click 'Run Simulation' to begin")
