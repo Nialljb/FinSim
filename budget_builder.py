@@ -281,7 +281,7 @@ def show_budget_builder():
                         converted_amount = convert_currency(amount, 'EUR', currency_code)
                         # Round to nearest integer for cleaner display
                         converted_template[category] = round(converted_amount)
-                    except Exception as e:
+                    except (ValueError, KeyError, TypeError) as e:
                         st.warning(f"Error converting {category}: {e}")
                         converted_template[category] = amount
                 
