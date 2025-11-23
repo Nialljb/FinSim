@@ -332,7 +332,7 @@ def show_budget_builder():
                 value=int(st.session_state.bb_1yr.get(category, 0)),
                 step=50,
                 key=f"bb_1yr_{category}_{st.session_state.bb_counter}",
-                label_visibility="collapsed"
+                # label_visibility="collapsed"
             )
             st.session_state.bb_1yr[category] = val
         
@@ -343,7 +343,7 @@ def show_budget_builder():
                 value=int(st.session_state.bb_5yr.get(category, 0)),
                 step=50,
                 key=f"bb_5yr_{category}_{st.session_state.bb_counter}",
-                label_visibility="collapsed"
+                # label_visibility="collapsed"
             )
             st.session_state.bb_5yr[category] = val
     
