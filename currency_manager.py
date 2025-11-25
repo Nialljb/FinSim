@@ -115,9 +115,15 @@ def to_base_currency(amount: float, from_currency: str) -> float:
     try:
         return convert_currency(amount, from_currency, BASE_CURRENCY)
     except Exception as e:
-        st.error(f"Error converting to base currency: {e}")
-        return float(amount)
-
+        # Try fallback rates before giving up
+        from currency_converter import FALLBACK_RATES
+        if from_currency in FALLBACK_RATES:
+            amount_in_eur = amount / FALLBACK_RATES[from_currency]
+            st.warning(f"Using fallback rate for {from_currency}")
+            return amount_in_eur
+        # If no fallback, re-raise to prevent corruption
+        st.error(f"Cannot convert {from_currency} to EUR: {e}")
+        raise
 
 def from_base_currency(amount: float, to_currency: str) -> float:
     """
@@ -136,8 +142,9 @@ def from_base_currency(amount: float, to_currency: str) -> float:
     try:
         return convert_currency(amount, BASE_CURRENCY, to_currency)
     except Exception as e:
-        st.error(f"Error converting from base currency: {e}")
-        return float(amount)
+        error_msg = f"Error converting {amount} from {BASE_CURRENCY} to {to_currency}: {e}"
+        st.error(error_msg)
+        raise ValueError(error_msg) from e
 
 
 def store_user_input(widget_key: str, base_key: str, value: float, currency: str):
@@ -196,6 +203,48 @@ def handle_currency_change(old_currency: str, new_currency: str) -> bool:
     return True
 
 
+# Schema mapping event types to their monetary field keys
+EVENT_MONETARY_FIELDS = {
+    'property_purchase': ['property_price', 'down_payment', 'mortgage_amount', 'new_mortgage_payment'],
+    'property_sale': ['sale_price', 'mortgage_payoff', 'selling_costs'],
+    'one_time_expense': ['amount'],
+    'expense_change': ['monthly_change'],
+    'rental_income': ['monthly_rental'],
+    'windfall': ['amount'],
+}
+
+
+def convert_events(events: List[Dict], conversion_fn, currency: str) -> List[Dict]:
+    """
+    Generic function to convert monetary fields in events using a conversion function
+    
+    Args:
+        events: List of event dictionaries
+        conversion_fn: Function to apply for conversion (e.g., to_base_currency or from_base_currency)
+        currency: Currency code to pass to conversion function
+        
+    Returns:
+        Events with monetary fields converted
+    """
+    converted_events = []
+    
+    for event in events:
+        event_copy = event.copy()
+        event_type = event.get('type')
+        
+        # Get the list of monetary fields for this event type
+        monetary_fields = EVENT_MONETARY_FIELDS.get(event_type, [])
+        
+        # Convert each monetary field if it exists in the event
+        for field in monetary_fields:
+            if field in event_copy:
+                event_copy[field] = conversion_fn(event_copy[field], currency)
+        
+        converted_events.append(event_copy)
+    
+    return converted_events
+
+
 def convert_events_to_base(events: List[Dict], from_currency: str) -> List[Dict]:
     """
     Convert financial events to base currency
@@ -207,38 +256,7 @@ def convert_events_to_base(events: List[Dict], from_currency: str) -> List[Dict]
     Returns:
         Events with amounts converted to base currency
     """
-    converted_events = []
-    
-    for event in events:
-        event_copy = event.copy()
-        
-        # Convert amounts based on event type
-        if event['type'] == 'property_purchase':
-            event_copy['property_price'] = to_base_currency(event['property_price'], from_currency)
-            event_copy['down_payment'] = to_base_currency(event['down_payment'], from_currency)
-            event_copy['mortgage_amount'] = to_base_currency(event['mortgage_amount'], from_currency)
-            event_copy['new_mortgage_payment'] = to_base_currency(event['new_mortgage_payment'], from_currency)
-            
-        elif event['type'] == 'property_sale':
-            event_copy['sale_price'] = to_base_currency(event['sale_price'], from_currency)
-            event_copy['mortgage_payoff'] = to_base_currency(event['mortgage_payoff'], from_currency)
-            event_copy['selling_costs'] = to_base_currency(event['selling_costs'], from_currency)
-            
-        elif event['type'] == 'one_time_expense':
-            event_copy['amount'] = to_base_currency(event['amount'], from_currency)
-            
-        elif event['type'] == 'expense_change':
-            event_copy['monthly_change'] = to_base_currency(event['monthly_change'], from_currency)
-            
-        elif event['type'] == 'rental_income':
-            event_copy['monthly_rental'] = to_base_currency(event['monthly_rental'], from_currency)
-            
-        elif event['type'] == 'windfall':
-            event_copy['amount'] = to_base_currency(event['amount'], from_currency)
-        
-        converted_events.append(event_copy)
-    
-    return converted_events
+    return convert_events(events, to_base_currency, from_currency)
 
 
 def convert_events_from_base(events: List[Dict], to_currency: str) -> List[Dict]:
@@ -253,38 +271,7 @@ def convert_events_from_base(events: List[Dict], to_currency: str) -> List[Dict]
     Returns:
         Events with amounts converted to target currency
     """
-    converted_events = []
-    
-    for event in events:
-        event_copy = event.copy()
-        
-        # Convert amounts based on event type
-        if event['type'] == 'property_purchase':
-            event_copy['property_price'] = from_base_currency(event['property_price'], to_currency)
-            event_copy['down_payment'] = from_base_currency(event['down_payment'], to_currency)
-            event_copy['mortgage_amount'] = from_base_currency(event['mortgage_amount'], to_currency)
-            event_copy['new_mortgage_payment'] = from_base_currency(event['new_mortgage_payment'], to_currency)
-            
-        elif event['type'] == 'property_sale':
-            event_copy['sale_price'] = from_base_currency(event['sale_price'], to_currency)
-            event_copy['mortgage_payoff'] = from_base_currency(event['mortgage_payoff'], to_currency)
-            event_copy['selling_costs'] = from_base_currency(event['selling_costs'], to_currency)
-            
-        elif event['type'] == 'one_time_expense':
-            event_copy['amount'] = from_base_currency(event['amount'], to_currency)
-            
-        elif event['type'] == 'expense_change':
-            event_copy['monthly_change'] = from_base_currency(event['monthly_change'], to_currency)
-            
-        elif event['type'] == 'rental_income':
-            event_copy['monthly_rental'] = from_base_currency(event['monthly_rental'], to_currency)
-            
-        elif event['type'] == 'windfall':
-            event_copy['amount'] = from_base_currency(event['amount'], to_currency)
-        
-        converted_events.append(event_copy)
-    
-    return converted_events
+    return convert_events(events, from_base_currency, to_currency)
 
 
 def get_exchange_rate_display(base_amount: float = 1.0) -> str:

@@ -171,9 +171,21 @@ def show_budget_builder():
     if 'bb_last_currency' not in st.session_state:
         st.session_state.bb_last_currency = currency_code
     
-    # If currency changed, update and rerun
+    # If currency changed, clear budget state and rerun
     if st.session_state.bb_last_currency != currency_code:
+        old_currency = st.session_state.bb_last_currency
+        
+        # Clear all budget values to prevent semantic currency flip
+        st.session_state.bb_now = {}
+        st.session_state.bb_1yr = {}
+        st.session_state.bb_5yr = {}
+        st.session_state.bb_events = []
+        
+        # Update currency tracker
         st.session_state.bb_last_currency = currency_code
+        
+        # Inform user
+        st.warning(f"💱 Currency changed from {old_currency} to {currency_code}. Budget values have been cleared.")
         st.rerun()
     
     # Define currency symbols
@@ -494,13 +506,16 @@ def show_budget_builder():
         st.metric("Financial Events", len(st.session_state.bb_events))
     
     if st.button("🚀 Go to Simulation with This Budget", type="primary", use_container_width=True, key="bb_go_sim"):
-        # Store in different keys to avoid conflicts
-        st.session_state.use_budget_builder = True
-        st.session_state.budget_monthly_expenses = int(total_now)
-        st.session_state.budget_currency = currency_code  # Store the currency the budget was created in
-        st.session_state.budget_events_list = [e.copy() for e in st.session_state.bb_events]
-        st.success(f"✅ Budget ready! Monthly: {format_currency(total_now, currency_code)}")
-        st.info("👉 Click the 'Simulation' tab to continue")
+        if total_now <= 0:
+            st.error("⚠️ Please set budget values before using in simulation.")
+        else:
+            # Store in different keys to avoid conflicts
+            st.session_state.use_budget_builder = True
+            st.session_state.budget_monthly_expenses = int(total_now)
+            st.session_state.budget_currency = currency_code  # Store the currency the budget was created in
+            st.session_state.budget_events_list = [e.copy() for e in st.session_state.bb_events]
+            st.success(f"✅ Budget ready! Monthly: {format_currency(total_now, currency_code)}")
+            st.info("👉 Click the 'Simulation' tab to continue")
 
 
 if __name__ == "__main__":
