@@ -205,7 +205,7 @@ def handle_currency_change(old_currency: str, new_currency: str) -> bool:
 
 # Schema mapping event types to their monetary field keys
 EVENT_MONETARY_FIELDS = {
-    'property_purchase': ['property_price', 'down_payment', 'mortgage_amount', 'new_mortgage_payment'],
+    'property_purchase': ['property_price', 'down_payment', 'mortgage_amount'],  # new_mortgage_payment excluded as it's pre-calculated
     'property_sale': ['sale_price', 'mortgage_payoff', 'selling_costs'],
     'one_time_expense': ['amount'],
     'expense_change': ['monthly_change'],

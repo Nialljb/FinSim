@@ -432,29 +432,29 @@ def show_budget_builder():
         if event_type == 'property_purchase':
             c1, c2, c3, c4 = st.columns(4)
             with c1:
-                event_details['property_price'] = st.number_input(f"Price ({currency_symbol})", 0, 5000000, 25000, key="bb_prop_price")
+                event_details['property_price'] = st.number_input(f"Price ({currency_symbol})", 0, 5000000, 500000, key=f"bb_prop_price_{currency_code}")
             with c2:
-                event_details['down_payment'] = st.number_input(f"Down ({currency_symbol})", 0, 1000000, 10000, key="bb_down")
+                event_details['down_payment'] = st.number_input(f"Down ({currency_symbol})", 0, 1000000, 500000, key=f"bb_down_{currency_code}")
             with c3:
-                event_details['mortgage_amount'] = st.number_input(f"Mortgage ({currency_symbol})", 0, 4000000, 25000, key="bb_mort")
+                event_details['mortgage_amount'] = st.number_input(f"Mortgage ({currency_symbol})", 0, 4000000, 0, key=f"bb_mort_{currency_code}")
             with c4:
                 event_details['mortgage_years'] = st.number_input("Years", 1, 35, 25, key="bb_mort_yrs")
         elif event_type == 'property_sale':
             c1, c2, c3 = st.columns(3)
             with c1:
-                event_details['sale_price'] = st.number_input(f"Sale Price ({currency_symbol})", 0, 6000000, 25000, key="bb_sale")
+                event_details['sale_price'] = st.number_input(f"Sale Price ({currency_symbol})", 0, 6000000, 600000, key=f"bb_sale_{currency_code}")
             with c2:
-                event_details['mortgage_payoff'] = st.number_input(f"Payoff ({currency_symbol})", 0, 3500000, 25000, key="bb_payoff")
+                event_details['mortgage_payoff'] = st.number_input(f"Payoff ({currency_symbol})", 0, 3500000, 350000, key=f"bb_payoff_{currency_code}")
             with c3:
-                event_details['selling_costs'] = st.number_input(f"Costs ({currency_symbol})", 0, 300000, 5000, key="bb_costs")
+                event_details['selling_costs'] = st.number_input(f"Costs ({currency_symbol})", 0, 300000, 30000, key=f"bb_costs_{currency_code}")
         elif event_type == 'one_time_expense':
-            event_details['amount'] = st.number_input(f"Amount ({currency_symbol})", 0, 300000, 5000, key="bb_exp_amt")
+            event_details['amount'] = st.number_input(f"Amount ({currency_symbol})", 0, 300000, 30000, key=f"bb_exp_amt_{currency_code}")
         elif event_type == 'expense_change':
-            event_details['monthly_change'] = st.number_input(f"Monthly Change ({currency_symbol})", value=1000, step=100, key="bb_mon_chg")
+            event_details['monthly_change'] = st.number_input(f"Monthly Change ({currency_symbol})", value=1000, step=100, key=f"bb_mon_chg_{currency_code}")
         elif event_type == 'rental_income':
-            event_details['monthly_rental'] = st.number_input(f"Monthly Rental ({currency_symbol})", 0, 20000, 100, key="bb_rental")
+            event_details['monthly_rental'] = st.number_input(f"Monthly Rental ({currency_symbol})", 0, 20000, 2000, key=f"bb_rental_{currency_code}")
         elif event_type == 'windfall':
-            event_details['amount'] = st.number_input(f"Amount ({currency_symbol})", 0, 500000, 10000, key="bb_wind")
+            event_details['amount'] = st.number_input(f"Amount ({currency_symbol})", 0, 500000, 50000, key=f"bb_wind_{currency_code}")
     
     with col_e4:
         st.markdown("<br>", unsafe_allow_html=True)

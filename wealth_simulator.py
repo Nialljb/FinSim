@@ -794,6 +794,11 @@ with tab1:
     # Handle currency change
     if selected_currency != previous_currency:
         handle_currency_change(previous_currency, selected_currency)
+        
+        # Clear old manual event widget keys (they don't have currency suffix)
+        old_keys = [k for k in st.session_state.keys() if k.startswith('manual_') and not k.endswith(f'_{selected_currency}')]
+        for key in old_keys:
+            del st.session_state[key]
 
     st.session_state.selected_currency = selected_currency
     currency_symbol = CURRENCIES[selected_currency]['symbol']
@@ -867,14 +872,15 @@ with tab1:
         step=0.25
     ) / 100
 
-    # Calculate initial monthly mortgage payment
-    if initial_mortgage > 0 and initial_mortgage_amortization > 0:
+    # Calculate initial monthly mortgage payment using base currency
+    base_mortgage = st.session_state.base_mortgage
+    if base_mortgage > 0 and initial_mortgage_amortization > 0:
         monthly_rate = mortgage_interest_rate / 12
         n_payments = initial_mortgage_amortization * 12
         if monthly_rate > 0:
-            calculated_payment = initial_mortgage * (monthly_rate * (1 + monthly_rate)**n_payments) / ((1 + monthly_rate)**n_payments - 1)
+            calculated_payment = base_mortgage * (monthly_rate * (1 + monthly_rate)**n_payments) / ((1 + monthly_rate)**n_payments - 1)
         else:
-            calculated_payment = initial_mortgage / n_payments
+            calculated_payment = base_mortgage / n_payments
     else:
         calculated_payment = 0
 
@@ -918,21 +924,10 @@ with tab1:
     # Monthly Budget
     st.sidebar.header("Monthly Budget")
 
-    # Handle budget builder integration
-    if st.session_state.get('use_budget_builder', False):
-        budget_value = st.session_state.get('budget_monthly_expenses', None)
-        if budget_value is not None and budget_value > 0:
-            default_monthly_expenses = int(budget_value)
-            st.sidebar.success(f"💡 Using Budget Builder: {format_currency(default_monthly_expenses, selected_currency)}")
-        else:
-            default_monthly_expenses = st.session_state.get('widget_monthly_expenses', st.session_state.display_monthly_expenses)
-    else:
-        default_monthly_expenses = st.session_state.get('widget_monthly_expenses', st.session_state.display_monthly_expenses)
-
     # Get display value from base
     display_expenses = get_display_value('base_monthly_expenses', selected_currency)
 
-    # Handle budget builder integration
+    # Handle budget builder integration - OVERRIDE display_expenses if budget is active
     if st.session_state.get('use_budget_builder', False):
         budget_value = st.session_state.get('budget_monthly_expenses', None)
         if budget_value is not None and budget_value > 0:
@@ -941,6 +936,11 @@ with tab1:
             base_budget = to_base_currency(budget_value, budget_currency)
             st.session_state.base_monthly_expenses = base_budget
             display_expenses = from_base_currency(base_budget, selected_currency)
+            
+            # Force update the widget's session state so it shows the correct value
+            widget_key = f'widget_monthly_expenses_{selected_currency}'
+            st.session_state[widget_key] = int(display_expenses)
+            
             st.sidebar.success(f"💡 Using Budget Builder: {format_currency(display_expenses, selected_currency)}")
 
     monthly_expenses = st.sidebar.number_input(
@@ -951,10 +951,12 @@ with tab1:
         key=f'widget_monthly_expenses_{selected_currency}'
     )
 
-    st.session_state.base_monthly_expenses = to_base_currency(
-        monthly_expenses,
-        selected_currency
-    )
+    # Only update base if NOT using budget builder (budget already set it above)
+    if not st.session_state.get('use_budget_builder', False):
+        st.session_state.base_monthly_expenses = to_base_currency(
+            monthly_expenses,
+            selected_currency
+        )
 
     st.sidebar.markdown("---")
 
@@ -1082,6 +1084,7 @@ with tab1:
                         'type': 'property_purchase',
                         'year': year,
                         'name': name,
+                        'from_budget': True,  # Mark as budget event (already converted)
                         'property_price': convert_event_value_to_base(
                             details.get('property_price', 500000),
                             event_currency
@@ -1099,6 +1102,7 @@ with tab1:
                         'type': 'property_sale',
                         'year': year,
                         'name': name,
+                        'from_budget': True,
                         'sale_price': convert_event_value_to_base(
                             details.get('sale_price', 600000),
                             event_currency
@@ -1118,6 +1122,7 @@ with tab1:
                         'type': 'one_time_expense',
                         'year': year,
                         'name': name,
+                        'from_budget': True,
                         'amount': convert_event_value_to_base(
                             details.get('amount', 30000),
                             event_currency
@@ -1133,6 +1138,7 @@ with tab1:
                         'type': 'expense_change',
                         'year': year,
                         'name': name,
+                        'from_budget': True,
                         'monthly_change': convert_event_value_to_base(
                             monthly_change,
                             event_currency
@@ -1144,6 +1150,7 @@ with tab1:
                             'type': 'one_time_expense',
                             'year': year,
                             'name': f"{name} - Initial Costs",
+                            'from_budget': True,
                             'amount': convert_event_value_to_base(
                                 budget_event['impacts']['one_time_costs'],
                                 event_currency
@@ -1155,6 +1162,7 @@ with tab1:
                         'type': 'rental_income',
                         'year': year,
                         'name': name,
+                        'from_budget': True,
                         'monthly_rental': convert_event_value_to_base(
                             details.get('monthly_rental', 2000),
                             event_currency
@@ -1166,6 +1174,7 @@ with tab1:
                         'type': 'windfall',
                         'year': year,
                         'name': name,
+                        'from_budget': True,
                         'amount': convert_event_value_to_base(
                             details.get('amount', 50000),
                             event_currency
@@ -1210,21 +1219,21 @@ with tab1:
                     min_value=0,
                     value=500000,
                     step=25000,
-                    key=f"manual_prop_price_{i}"
+                    key=f"manual_prop_price_{i}_{selected_currency}"
                 )
                 down_payment = st.number_input(
                     f"Down Payment ({currency_symbol})",
                     min_value=0,
                     value=100000,
                     step=10000,
-                    key=f"manual_down_{i}"
+                    key=f"manual_down_{i}_{selected_currency}"
                 )
                 mort_amount = st.number_input(
                     f"Mortgage Amount ({currency_symbol})",
                     min_value=0,
                     value=400000,
                     step=25000,
-                    key=f"manual_mort_{i}"
+                    key=f"manual_mort_{i}_{selected_currency}"
                 )
                 mort_years = st.number_input(
                     "Mortgage Years",
@@ -1235,6 +1244,8 @@ with tab1:
                 )
                 
                 new_payment = calculate_mortgage_payment(mort_amount, mortgage_interest_rate, mort_years)
+                # Convert new_payment to base currency before adding to calculated_payment
+                new_payment_base = to_base_currency(new_payment, selected_currency)
                 events.append({
                     'type': 'property_purchase',
                     'year': event_year,
@@ -1242,7 +1253,7 @@ with tab1:
                     'property_price': prop_price,
                     'down_payment': down_payment,
                     'mortgage_amount': mort_amount,
-                    'new_mortgage_payment': calculated_payment + new_payment
+                    'new_mortgage_payment': calculated_payment + new_payment_base
                 })
             
             elif event_type == "Property Sale":
@@ -1251,21 +1262,21 @@ with tab1:
                     min_value=0,
                     value=600000,
                     step=25000,
-                    key=f"manual_sale_{i}"
+                    key=f"manual_sale_{i}_{selected_currency}"
                 )
                 payoff = st.number_input(
                     f"Mortgage Payoff ({currency_symbol})",
                     min_value=0,
                     value=350000,
                     step=25000,
-                    key=f"manual_payoff_{i}"
+                    key=f"manual_payoff_{i}_{selected_currency}"
                 )
                 costs = st.number_input(
                     f"Selling Costs ({currency_symbol})",
                     min_value=0,
                     value=30000,
                     step=5000,
-                    key=f"manual_costs_{i}"
+                    key=f"manual_costs_{i}_{selected_currency}"
                 )
                 
                 events.append({
@@ -1283,7 +1294,7 @@ with tab1:
                     min_value=0,
                     value=30000,
                     step=5000,
-                    key=f"manual_expense_{i}"
+                    key=f"manual_expense_{i}_{selected_currency}"
                 )
                 
                 events.append({
@@ -1298,7 +1309,7 @@ with tab1:
                     f"Monthly Change ({currency_symbol})",
                     value=1000,
                     step=100,
-                    key=f"manual_change_{i}"
+                    key=f"manual_change_{i}_{selected_currency}"
                 )
                 
                 events.append({
@@ -1314,7 +1325,7 @@ with tab1:
                     min_value=0,
                     value=2000,
                     step=100,
-                    key=f"manual_rental_{i}"
+                    key=f"manual_rental_{i}_{selected_currency}"
                 )
                 
                 events.append({
@@ -1330,7 +1341,7 @@ with tab1:
                     min_value=0,
                     value=50000,
                     step=10000,
-                    key=f"manual_windfall_{i}"
+                    key=f"manual_windfall_{i}_{selected_currency}"
                 )
                 
                 events.append({
@@ -1363,17 +1374,26 @@ with tab1:
             sim_income = st.session_state.base_annual_income
             sim_expenses = st.session_state.base_monthly_expenses
             
-            # Convert events to base currency
-            base_events = convert_events_to_base(events, selected_currency)
+            # Budget events are already in base currency (converted when created)
+            # Manual events need to be converted from display currency to base
+            # Separate them to avoid double conversion
+            budget_events = [e for e in events if 'from_budget' in e]
+            manual_events = [e for e in events if 'from_budget' not in e]
+            
+            # Only convert manual events (budget events already converted)
+            converted_manual_events = convert_events_to_base(manual_events, selected_currency) if manual_events else []
+            
+            # Combine both event types
+            base_events = budget_events + converted_manual_events
 
             results = run_monte_carlo(
-                initial_liquid_wealth=initial_liquid_wealth,
-                initial_property_value=initial_property_value,
-                initial_mortgage=initial_mortgage,
-                gross_annual_income=gross_annual_income,
+                initial_liquid_wealth=sim_liquid_wealth,
+                initial_property_value=sim_property_value,
+                initial_mortgage=sim_mortgage,
+                gross_annual_income=sim_income,
                 effective_tax_rate=effective_tax_rate,
                 pension_contribution_rate=pension_contribution_rate,
-                monthly_expenses=monthly_expenses,
+                monthly_expenses=sim_expenses,
                 monthly_mortgage_payment=calculated_payment,
                 property_appreciation=property_appreciation,
                 mortgage_interest_rate=mortgage_interest_rate,
@@ -1454,7 +1474,7 @@ with tab1:
         years = simulation_years
         
         if view_type == "Total Net Worth":
-            paths_to_plot = results['real_net_worth'] if show_real else display_results['net_worth']
+            paths_to_plot = display_results['real_net_worth'] if show_real else display_results['net_worth']
             y_label = "Net Worth"
         elif view_type == "Liquid Wealth":
             paths_to_plot = display_results['liquid_wealth']
