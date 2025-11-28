@@ -1927,16 +1927,39 @@ with tab1:
                 )
                 st.caption("⚠️ PDF unavailable - use Excel export")
 
-
-        # Add cash flow summary
-        st.subheader("Annual Cash Flow Available for Savings")
+        # Annual Cash Flow Summary - Combined Section
+        st.markdown("---")
+        st.subheader("Annual Cash Flow Summary")
         
-        # Calculate median available cash flow over time
-        # We need to recalculate this based on the simulation parameters
+        # Calculate Year 1 cash flow
+        pension_contrib = gross_annual_income * pension_contribution_rate
+        tax = gross_annual_income * effective_tax_rate
+        take_home = gross_annual_income - pension_contrib - tax
+        annual_expenses_calc = monthly_expenses * 12
+        annual_mortgage_calc = calculated_payment * 12
+        annual_available_yr1 = take_home - annual_expenses_calc - annual_mortgage_calc
+        
+        # Check for property events that will change mortgage payments
+        future_mortgage_changes = []
+        for event in events:
+            if event.get('type') == 'property_purchase':
+                future_mortgage_changes.append({
+                    'year': event['year'],
+                    'new_payment': event['new_mortgage_payment'],
+                    'description': event['name']
+                })
+            elif event.get('type') == 'property_sale':
+                future_mortgage_changes.append({
+                    'year': event['year'],
+                    'new_payment': 0,
+                    'description': event['name']
+                })
+        
+        # Row 1: Year 1 breakdown and metrics
         col1, col2 = st.columns(2)
         
         with col1:
-            st.markdown("**Current Year 1 Cash Flow**")
+            st.markdown("**Year 1 Cash Flow Breakdown**")
             year1_income = gross_annual_income
             year1_pension = year1_income * pension_contribution_rate
             year1_tax = year1_income * effective_tax_rate
@@ -1966,83 +1989,7 @@ with tab1:
                 st.success(f"✓ Annual savings: {format_currency(year1_available, selected_currency)} ({format_currency(year1_available/12, selected_currency)}/month)")
         
         with col2:
-            st.markdown("**Liquid Wealth Warning Check**")
-            min_liquid = np.median(results['liquid_wealth'], axis=0).min()
-            if show_real:
-                inflation_adj = np.concatenate([[1], np.cumprod(1 + np.median(results['inflation_rates'], axis=0))])
-                min_liquid = (np.median(results['liquid_wealth'], axis=0) / inflation_adj).min()
-            
-            if min_liquid < 0:
-                st.error(f"⚠️ Liquid wealth goes negative!\nMinimum: {format_currency(min_liquid, selected_currency)}")
-                st.markdown("**Recommendations:**")
-                st.markdown("- Reduce monthly expenses")
-                st.markdown("- Reduce monthly savings target")
-                st.markdown("- Increase income")
-                st.markdown("- Review major financial events")
-            else:
-                st.success(f"✓ Liquid wealth stays positive\nMinimum: {format_currency(min_liquid, selected_currency)}")
-                
-            # Show final liquid wealth
-            final_liquid = np.median(results['liquid_wealth'], axis=0)[-1]
-            if show_real:
-                final_liquid = final_liquid / inflation_adj[-1]
-            st.metric("Median Final Liquid Wealth", format_currency(final_liquid, selected_currency))
-    
-
-        st.subheader(f"Net Worth by Age Milestones")
-        
-        milestone_years = [5, 10, 15, 20, 25, 30]
-        milestone_data = []
-        
-        for year in milestone_years:
-            if year <= simulation_years:
-                age_at_milestone = starting_age + year
-                year_wealth = display_results['net_worth'][:, year]
-                
-                milestone_data.append({
-                    'Year': year,
-                    'Age': age_at_milestone,
-                    '10th': format_currency(np.percentile(year_wealth, 10), selected_currency),
-                    '25th': format_currency(np.percentile(year_wealth, 25), selected_currency),
-                    '50th': format_currency(np.percentile(year_wealth, 50), selected_currency),
-                    '75th': format_currency(np.percentile(year_wealth, 75), selected_currency),
-                    '90th': format_currency(np.percentile(year_wealth, 90), selected_currency),
-                })
-        
-        milestone_df = pd.DataFrame(milestone_data)
-        st.dataframe(milestone_df, use_container_width=True, hide_index=True)
-
-        # Annual Cash Flow Summary
-        st.markdown("---")
-        st.subheader("Annual Cash Flow Summary")
-        
-        # Calculate Year 1 cash flow
-        pension_contrib = gross_annual_income * pension_contribution_rate
-        tax = gross_annual_income * effective_tax_rate
-        take_home = gross_annual_income - pension_contrib - tax
-        annual_expenses_calc = monthly_expenses * 12
-        annual_mortgage_calc = calculated_payment * 12
-        annual_available_yr1 = take_home - annual_expenses_calc - annual_mortgage_calc
-        
-        # Check for property events that will change mortgage payments
-        future_mortgage_changes = []
-        for event in events:
-            if event.get('type') == 'property_purchase':
-                future_mortgage_changes.append({
-                    'year': event['year'],
-                    'new_payment': event['new_mortgage_payment'],
-                    'description': event['name']
-                })
-            elif event.get('type') == 'property_sale':
-                future_mortgage_changes.append({
-                    'year': event['year'],
-                    'new_payment': 0,
-                    'description': event['name']
-                })
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
+            st.markdown("**Key Metrics**")
             st.metric(
                 "Year 1 Net Income",
                 format_currency(take_home, selected_currency),
@@ -2053,8 +2000,6 @@ with tab1:
                 format_currency(annual_expenses_calc + annual_mortgage_calc, selected_currency),
                 help="Living expenses plus mortgage payments"
             )
-            
-        with col2:
             st.metric(
                 "Year 1 Available Savings",
                 format_currency(annual_available_yr1, selected_currency),
@@ -2064,6 +2009,37 @@ with tab1:
             
             if future_mortgage_changes:
                 st.info(f"📅 {len(future_mortgage_changes)} property event(s) will change mortgage payments")
+        
+        # Row 2: Liquid wealth check
+        st.markdown("**Liquid Wealth Status**")
+        col1, col2, col3 = st.columns(3)
+        
+        min_liquid = np.median(results['liquid_wealth'], axis=0).min()
+        if show_real:
+            inflation_adj = np.concatenate([[1], np.cumprod(1 + np.median(results['inflation_rates'], axis=0))])
+            min_liquid = (np.median(results['liquid_wealth'], axis=0) / inflation_adj).min()
+        
+        final_liquid = np.median(results['liquid_wealth'], axis=0)[-1]
+        if show_real:
+            final_liquid = final_liquid / inflation_adj[-1]
+        
+        with col1:
+            if min_liquid < 0:
+                st.error(f"⚠️ Liquid wealth goes negative!")
+                st.metric("Minimum Liquid Wealth", format_currency(min_liquid, selected_currency))
+            else:
+                st.success(f"✓ Liquid wealth stays positive")
+                st.metric("Minimum Liquid Wealth", format_currency(min_liquid, selected_currency))
+        
+        with col2:
+            st.metric("Median Final Liquid Wealth", format_currency(final_liquid, selected_currency))
+        
+        with col3:
+            if min_liquid < 0:
+                st.markdown("**Recommendations:**")
+                st.markdown("- Reduce monthly expenses")
+                st.markdown("- Increase income")
+                st.markdown("- Review major events")
         
         # Cash Flow Projection with Financial Events
         st.markdown("---")
@@ -2155,6 +2131,31 @@ with tab1:
         
         st.caption("💡 Take-home income grows with salary inflation. Expenses and mortgage shown in nominal dollars (not inflation-adjusted).")
         st.caption("📝 Events: 🏠 Property Purchase, 💰 Property Sale, 📊 Expense Change, 🏘️ Rental Income, 💸 One-Time Expense, 💵 Windfall")
+        
+        # Net Worth by Age Milestones
+        st.markdown("---")
+        st.subheader("Net Worth by Age Milestones")
+        
+        milestone_years = [5, 10, 15, 20, 25, 30]
+        milestone_data = []
+        
+        for year in milestone_years:
+            if year <= simulation_years:
+                age_at_milestone = starting_age + year
+                year_wealth = display_results['net_worth'][:, year]
+                
+                milestone_data.append({
+                    'Year': year,
+                    'Age': age_at_milestone,
+                    '10th': format_currency(np.percentile(year_wealth, 10), selected_currency),
+                    '25th': format_currency(np.percentile(year_wealth, 25), selected_currency),
+                    '50th': format_currency(np.percentile(year_wealth, 50), selected_currency),
+                    '75th': format_currency(np.percentile(year_wealth, 75), selected_currency),
+                    '90th': format_currency(np.percentile(year_wealth, 90), selected_currency),
+                })
+        
+        milestone_df = pd.DataFrame(milestone_data)
+        st.dataframe(milestone_df, use_container_width=True, hide_index=True)
         
         # Distribution at key years
         st.markdown("---")
