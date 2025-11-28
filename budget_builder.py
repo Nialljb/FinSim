@@ -10,6 +10,7 @@ from datetime import datetime
 import json
 from currency_converter import convert_currency
 from currency_manager import format_currency
+from database import save_budget, get_user_budgets, load_budget, delete_budget
 
 # Budget templates (in Euros)
 BUDGET_TEMPLATES = {
@@ -163,6 +164,119 @@ def show_budget_builder():
     
     st.title("💰 Budget Builder")
     st.markdown("Build detailed monthly budgets and plan life events")
+    
+    # Save/Load Budget Controls
+    if st.session_state.get('authenticated', False):
+        with st.expander("💾 Save / Load Budgets", expanded=False):
+            col1, col2 = st.columns([1, 1])
+            
+            with col1:
+                st.subheader("📥 Load Budget")
+                
+                # Get user's saved budgets
+                user_budgets = get_user_budgets(st.session_state.user_id, limit=20)
+                
+                if user_budgets:
+                    budget_options = {f"{budget.name} ({budget.created_at.strftime('%Y-%m-%d %H:%M')})": budget.id for budget in user_budgets}
+                    
+                    selected_budget_name = st.selectbox(
+                        "Select a saved budget",
+                        options=[""] + list(budget_options.keys()),
+                        key="load_budget_selector"
+                    )
+                    
+                    col_load, col_delete = st.columns([1, 1])
+                    
+                    with col_load:
+                        if st.button("Load", type="primary", disabled=not selected_budget_name, use_container_width=True, key="load_budget_btn"):
+                            if selected_budget_name:
+                                budget_id = budget_options[selected_budget_name]
+                                success, data = load_budget(st.session_state.user_id, budget_id)
+                                
+                                if success:
+                                    # Get current currency
+                                    current_currency = st.session_state.get('selected_currency', 'EUR')
+                                    saved_currency = data.get('currency', 'EUR')
+                                    
+                                    # Restore budget data to session state
+                                    st.session_state.bb_now = data['budget_now']
+                                    st.session_state.bb_1yr = data['budget_1yr']
+                                    st.session_state.bb_5yr = data['budget_5yr']
+                                    st.session_state.bb_events = data['life_events']
+                                    
+                                    # Increment counter to force widget refresh with loaded values
+                                    if 'bb_counter' not in st.session_state:
+                                        st.session_state.bb_counter = 0
+                                    st.session_state.bb_counter += 1
+                                    
+                                    # Update the last currency tracker to match saved currency
+                                    st.session_state.bb_last_currency = saved_currency
+                                    
+                                    success_msg = f"✅ Loaded: {data['name']}"
+                                    if saved_currency != current_currency:
+                                        st.warning(f"⚠️ Budget was saved in {saved_currency}, but current currency is {current_currency}. Values displayed in current currency.")
+                                    else:
+                                        st.success(success_msg)
+                                    
+                                    st.rerun()
+                                else:
+                                    st.error(f"❌ {data}")
+                    
+                    with col_delete:
+                        if st.button("Delete", type="secondary", disabled=not selected_budget_name, use_container_width=True, key="delete_budget_btn"):
+                            if selected_budget_name:
+                                budget_id = budget_options[selected_budget_name]
+                                success, message = delete_budget(st.session_state.user_id, budget_id)
+                                if success:
+                                    st.success(f"✅ {message}")
+                                    st.rerun()
+                                else:
+                                    st.error(f"❌ {message}")
+                else:
+                    st.info("No saved budgets yet. Create a budget and save it!")
+            
+            with col2:
+                st.subheader("💾 Save Current Budget")
+                
+                # Check if there's a budget to save
+                has_budget = (st.session_state.get('bb_now') or 
+                             st.session_state.get('bb_1yr') or 
+                             st.session_state.get('bb_5yr'))
+                
+                if has_budget:
+                    save_budget_name = st.text_input(
+                        "Budget Name",
+                        value=f"Budget {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+                        key="save_budget_name"
+                    )
+                    
+                    save_budget_desc = st.text_area(
+                        "Description (optional)",
+                        key="save_budget_desc",
+                        height=60
+                    )
+                    
+                    if st.button("Save Budget", type="primary", use_container_width=True, key="save_budget_btn"):
+                        # Get current currency
+                        current_currency = st.session_state.get('selected_currency', 'EUR')
+                        
+                        success, result = save_budget(
+                            st.session_state.user_id,
+                            save_budget_name,
+                            st.session_state.get('bb_now', {}),
+                            st.session_state.get('bb_1yr', {}),
+                            st.session_state.get('bb_5yr', {}),
+                            st.session_state.get('bb_events', []),
+                            save_budget_desc if save_budget_desc else None,
+                            current_currency  # Pass the currency
+                        )
+                        
+                        if success:
+                            st.success(f"✅ Saved as: {save_budget_name} ({current_currency})")
+                        else:
+                            st.error(f"❌ Error: {result}")
+                else:
+                    st.info("Create a budget first to save it")
     
     # Get currency from session state (set by simulation tab)
     currency_code = st.session_state.get('selected_currency', 'EUR')
@@ -514,8 +628,15 @@ def show_budget_builder():
             st.session_state.budget_monthly_expenses = int(total_now)
             st.session_state.budget_currency = currency_code  # Store the currency the budget was created in
             st.session_state.budget_events_list = [e.copy() for e in st.session_state.bb_events]
+            
+            # Set flags for user feedback
+            st.session_state.just_set_budget = True
+            
             st.success(f"✅ Budget ready! Monthly: {format_currency(total_now, currency_code)}")
-            st.info("👉 Click the 'Simulation' tab to continue")
+            st.info("👈 Switch to the **Simulation** tab to use this budget")
+            
+            # Note: Streamlit tabs don't support programmatic switching,
+            # but we show a clear message to guide the user
 
 
 if __name__ == "__main__":

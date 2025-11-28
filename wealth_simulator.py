@@ -698,8 +698,28 @@ def calculate_mortgage_payment(principal, annual_rate, years):
     return payment
 
 
-# Create tabs
+# Create tabs with session state control
+# Check if we should switch to simulation tab
+if st.session_state.get('switch_to_simulation', False):
+    # Clear the flag
+    st.session_state.switch_to_simulation = False
+    # Set default tab to simulation
+    if 'active_tab' not in st.session_state:
+        st.session_state.active_tab = 0
+    st.session_state.active_tab = 0
+
+# Initialize active tab if not set
+if 'active_tab' not in st.session_state:
+    st.session_state.active_tab = 0
+
+# Create tabs - note: we can't programmatically select, but we can reorder content
+# Workaround: Use radio buttons styled as tabs or show info message
 tab1, tab2 = st.tabs(["🎲 Simulation", "💰 Budget Builder"])
+
+# Show message if user just came from budget builder
+if st.session_state.get('just_set_budget', False):
+    st.info("✅ Budget loaded! You're now on the Simulation tab.")
+    st.session_state.just_set_budget = False
 
 with tab2:
     from budget_builder import show_budget_builder
