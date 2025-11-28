@@ -4,7 +4,7 @@ Handles width, theming, and responsive design better
 """
 
 import streamlit as st
-from auth import initialize_session_state, login_user, register_user, logout
+from auth import initialize_session_state, login_user, register_user, logout, request_password_reset
 
 
 def show_landing_page():
@@ -386,11 +386,11 @@ def show_landing_page():
         </div>
         ''', unsafe_allow_html=True)
         
-        tab1, tab2 = st.tabs(["Login", "Create Account"])
+        tab1, tab2, tab3 = st.tabs(["Login", "Create Account", "Forgot Password"])
         
         with tab1:
             with st.form("login_form"):
-                username = st.text_input("Username", key="login_username")
+                username = st.text_input("Username or Email", key="login_username", placeholder="Enter username or email")
                 password = st.text_input("Password", type="password", key="login_password")
                 
                 col1, col2 = st.columns([1, 1])
@@ -417,6 +417,7 @@ def show_landing_page():
             
             # Demo account info
             st.info("💡 **Try it out:**\n\nUsername: `testuser`\n\nPassword: `password123`")
+            st.caption("Forgot your password? Use the 'Forgot Password' tab.")
         
         with tab2:
             with st.form("register_form"):
@@ -440,12 +441,20 @@ def show_landing_page():
                 country = st.text_input("Country (Optional)", key="reg_country", placeholder="e.g., Canada")
                 
                 st.markdown("---")
+                st.markdown("**Required Agreements***")
                 
-                col1, col2 = st.columns(2)
-                with col1:
-                    consent = st.checkbox("Anonymized data sharing", key="consent", value=False)
-                with col2:
-                    terms = st.checkbox("Terms & Privacy", key="terms", value=False)
+                # View terms link
+                with st.expander("📄 View Terms of Use & Privacy Policy"):
+                    try:
+                        with open('docs/TERMS_AND_PRIVACY.md', 'r') as f:
+                            terms_content = f.read()
+                        st.markdown(terms_content)
+                    except:
+                        st.info("Terms document available in docs/TERMS_AND_PRIVACY.md")
+                
+                consent = st.checkbox("✓ I agree to anonymized data sharing for research and product improvement*", key="consent", value=False)
+                terms = st.checkbox("✓ I have read and agree to the Terms of Use and Privacy Policy*", key="terms", value=False)
+                age_confirm = st.checkbox("✓ I confirm I am at least 18 years old*", key="age_confirm", value=False)
                 
                 submit_register = st.form_submit_button("Create Free Account", type="primary", use_container_width=True)
                 
@@ -457,9 +466,11 @@ def show_landing_page():
                     elif len(new_password) < 8:
                         st.error("Password must be at least 8 characters")
                     elif not consent:
-                        st.error("Please agree to data sharing")
+                        st.error("❌ You must agree to anonymized data sharing to use FinSim")
                     elif not terms:
-                        st.error("Please agree to Terms")
+                        st.error("❌ You must agree to the Terms of Use and Privacy Policy")
+                    elif not age_confirm:
+                        st.error("❌ You must be at least 18 years old to use FinSim")
                     else:
                         success, message = register_user(
                             new_username, new_email, new_password,
@@ -472,6 +483,26 @@ def show_landing_page():
                             st.info("👉 Switch to Login tab")
                         else:
                             st.error(message)
+        
+        with tab3:
+            st.markdown("### 🔑 Password Recovery")
+            st.markdown("Enter the email address associated with your account to recover your username.")
+            
+            with st.form("password_recovery_form"):
+                recovery_email = st.text_input("Email Address", key="recovery_email", placeholder="your.email@example.com")
+                submit_recovery = st.form_submit_button("Recover Account", type="primary", use_container_width=True)
+                
+                if submit_recovery:
+                    if not recovery_email:
+                        st.error("Please enter your email address")
+                    else:
+                        result = request_password_reset(recovery_email)
+                        if "Account found" in result:
+                            st.success(result)
+                            st.info("👉 Use the username above to log in. If you've forgotten your password, please contact support.")
+                        else:
+                            st.warning(result)
+                            st.caption("If you don't receive a response, the email may not be registered or there may be a typo.")
     
     with col_right:
         st.markdown("### ✨ Key Features")
