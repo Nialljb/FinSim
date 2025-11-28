@@ -1661,6 +1661,29 @@ with tab1:
             
             st.success(f"✅ Simulation complete! Projected from age {starting_age} to {retirement_age}.")
 
+    # Support/Donation Section
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 💝 Support FinSim")
+    st.sidebar.markdown("""
+        Love FinSim? Help keep it **free** and **ad-free** for everyone!
+        
+        Your support helps us:
+        - 🚀 Add new features
+        - 🌍 Support more currencies
+        - 💾 Keep servers running
+    """)
+    
+    # Ko-fi button with custom styling
+    st.sidebar.markdown("""
+        <a href="https://ko-fi.com/YOUR_KOFI_USERNAME" target="_blank">
+            <img src="https://ko-fi.com/img/githubbutton_sm.svg" 
+                 alt="Support on Ko-fi" 
+                 style="height: 36px; border: 0px;">
+        </a>
+    """, unsafe_allow_html=True)
+    
+    st.sidebar.caption("💡 Every coffee helps us improve FinSim!")
+
     # ============================================================================
     # DISPLAY RESULTS
     # ============================================================================
