@@ -6,7 +6,7 @@ Handles user registration, login, and session management
 import bcrypt
 import streamlit as st
 from datetime import datetime, timedelta
-from database import SessionLocal, User, UsageStats
+from database import SessionLocal, User, UsageStats, Feedback
 import hashlib
 import secrets
 
@@ -269,6 +269,45 @@ def reset_simulation_count(user_id: int):
         db.close()
 
 
+def submit_feedback(user_id: int, feedback_type: str, subject: str, message: str, 
+                   page_context: str = None, user_email: str = None):
+    """Submit user feedback to database
+    
+    Args:
+        user_id: User ID submitting feedback
+        feedback_type: Type of feedback ('bug', 'feature', 'general', 'issue')
+        subject: Brief subject/title
+        message: Detailed feedback message
+        page_context: Which page/feature they were using (optional)
+        user_email: Email for follow-up (optional)
+    
+    Returns:
+        tuple: (success, message)
+    """
+    db = SessionLocal()
+    try:
+        feedback = Feedback(
+            user_id=user_id,
+            feedback_type=feedback_type,
+            subject=subject,
+            message=message,
+            page_context=page_context,
+            user_email=user_email,
+            status='new'
+        )
+        
+        db.add(feedback)
+        db.commit()
+        
+        return True, "Thank you for your feedback! We'll review it soon."
+        
+    except Exception as e:
+        db.rollback()
+        return False, f"Error submitting feedback: {str(e)}"
+    finally:
+        db.close()
+
+
 def initialize_session_state():
     """Initialize Streamlit session state for authentication with persistence"""
     
@@ -489,7 +528,7 @@ def request_password_reset(email: str):
 def show_user_header():
     """Display user info header when logged in"""
     if st.session_state.authenticated:
-        col1, col2, col3 = st.columns([3, 1, 1])
+        col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
         
         with col1:
             st.markdown(f"👤 **{st.session_state.username}**")
@@ -497,9 +536,107 @@ def show_user_header():
         with col2:
             # Show usage stats
             stats_data = get_user_usage_stats(st.session_state.user_id)
-            st.caption(f"📊 Simulations: {stats_data['simulations_this_month']}/5")
+            st.caption(f"📊 Simulations: {stats_data['simulations_this_month']}/10")
         
         with col3:
+            if st.button("💬 Feedback"):
+                st.session_state.show_feedback_modal = True
+        
+        with col4:
             if st.button("Logout"):
                 logout()
                 st.rerun()
+        
+        # Feedback modal
+        if st.session_state.get('show_feedback_modal', False):
+            with st.expander("📝 Submit Feedback or Report Issue", expanded=True):
+                st.markdown("""Choose how you'd like to share your feedback:""")
+                
+                feedback_method = st.radio(
+                    "Feedback Method",
+                    ["Quick Feedback (Internal)", "Report on GitHub Issues"],
+                    help="Quick feedback is stored internally. GitHub allows public tracking and discussion."
+                )
+                
+                if feedback_method == "Report on GitHub Issues":
+                    st.markdown("""### Report on GitHub
+                    
+For bugs, feature requests, or public discussion, please visit our GitHub Issues page:
+                    
+                    👉 **[Open GitHub Issues](https://github.com/Nialljb/FinSim/issues)**
+                    
+                    This allows you to:
+                    - Track the status of your report
+                    - Participate in discussions
+                    - See what others are reporting
+                    """)
+                    
+                    if st.button("Close", key="close_github"):
+                        st.session_state.show_feedback_modal = False
+                        st.rerun()
+                
+                else:
+                    # Internal feedback form
+                    with st.form("feedback_form", clear_on_submit=True):
+                        feedback_type = st.selectbox(
+                            "Type",
+                            ["General Feedback", "Bug Report", "Feature Request", "Issue/Problem"],
+                            help="What kind of feedback are you providing?"
+                        )
+                        
+                        subject = st.text_input(
+                            "Subject",
+                            placeholder="Brief description of your feedback",
+                            max_chars=255
+                        )
+                        
+                        message = st.text_area(
+                            "Message",
+                            placeholder="Please provide details about your feedback, bug, or feature request...",
+                            height=150
+                        )
+                        
+                        page_context = st.text_input(
+                            "Where did this occur? (Optional)",
+                            placeholder="e.g., Simulation Page, Budget Builder, etc."
+                        )
+                        
+                        col_a, col_b = st.columns([1, 1])
+                        
+                        with col_a:
+                            submit = st.form_submit_button("Submit Feedback", type="primary", use_container_width=True)
+                        
+                        with col_b:
+                            cancel = st.form_submit_button("Cancel", use_container_width=True)
+                        
+                        if submit:
+                            if not subject or not message:
+                                st.error("Please fill in both subject and message")
+                            else:
+                                # Map friendly names to database values
+                                type_map = {
+                                    "General Feedback": "general",
+                                    "Bug Report": "bug",
+                                    "Feature Request": "feature",
+                                    "Issue/Problem": "issue"
+                                }
+                                
+                                success, result_msg = submit_feedback(
+                                    user_id=st.session_state.user_id,
+                                    feedback_type=type_map[feedback_type],
+                                    subject=subject,
+                                    message=message,
+                                    page_context=page_context if page_context else None,
+                                    user_email=st.session_state.user_email
+                                )
+                                
+                                if success:
+                                    st.success(result_msg)
+                                    st.session_state.show_feedback_modal = False
+                                    st.rerun()
+                                else:
+                                    st.error(result_msg)
+                        
+                        if cancel:
+                            st.session_state.show_feedback_modal = False
+                            st.rerun()

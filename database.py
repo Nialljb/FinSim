@@ -189,6 +189,35 @@ class SavedBudget(Base):
         return f"<SavedBudget(id={self.id}, user_id={self.user_id}, name='{self.name}')>"
 
 
+class Feedback(Base):
+    """User feedback and issue reports"""
+    __tablename__ = "feedback"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    
+    # Feedback details
+    feedback_type = Column(String(50), nullable=False)  # 'bug', 'feature', 'general', 'issue'
+    subject = Column(String(255), nullable=False)
+    message = Column(Text, nullable=False)
+    
+    # Context information
+    page_context = Column(String(100), nullable=True)  # Which page/feature they were using
+    user_email = Column(String(255), nullable=True)  # For follow-up
+    
+    # Status tracking
+    status = Column(String(50), default='new')  # 'new', 'reviewed', 'resolved', 'closed'
+    admin_notes = Column(Text, nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+    
+    def __repr__(self):
+        return f"<Feedback(id={self.id}, type='{self.feedback_type}', status='{self.status}')>"
+
+
 def init_db():
     """Initialize database - create all tables"""
     Base.metadata.create_all(bind=engine)
