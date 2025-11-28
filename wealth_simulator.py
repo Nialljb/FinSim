@@ -13,7 +13,7 @@ from reportlab.lib.units import inch
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 import plotly.io as pio
 from auth import initialize_session_state, show_login_page, show_user_header, check_simulation_limit, increment_simulation_count, increment_export_count
-from data_tracking import save_simulation
+from data_tracking import save_simulation, save_full_simulation, load_simulation, get_user_simulations, delete_simulation, update_simulation_name
 from database import init_db
 from alt_landing_page import show_landing_page
 from currency_converter import get_exchange_rates, convert_currency, show_currency_info
@@ -698,8 +698,28 @@ def calculate_mortgage_payment(principal, annual_rate, years):
     return payment
 
 
-# Create tabs
+# Create tabs with session state control
+# Check if we should switch to simulation tab
+if st.session_state.get('switch_to_simulation', False):
+    # Clear the flag
+    st.session_state.switch_to_simulation = False
+    # Set default tab to simulation
+    if 'active_tab' not in st.session_state:
+        st.session_state.active_tab = 0
+    st.session_state.active_tab = 0
+
+# Initialize active tab if not set
+if 'active_tab' not in st.session_state:
+    st.session_state.active_tab = 0
+
+# Create tabs - note: we can't programmatically select, but we can reorder content
+# Workaround: Use radio buttons styled as tabs or show info message
 tab1, tab2 = st.tabs(["🎲 Simulation", "💰 Budget Builder"])
+
+# Show message if user just came from budget builder
+if st.session_state.get('just_set_budget', False):
+    st.info("✅ Budget loaded! You're now on the Simulation tab.")
+    st.session_state.just_set_budget = False
 
 with tab2:
     from budget_builder import show_budget_builder
@@ -732,6 +752,174 @@ with tab1:
     # Title
     st.title("30-Year Wealth Path Simulator")
     st.markdown("Interactive Monte Carlo simulation to explore your financial future")
+    
+    # Show loaded simulation indicator
+    if st.session_state.get('loaded_simulation_name'):
+        st.info(f"📂 Currently viewing: **{st.session_state.loaded_simulation_name}**")
+
+    # Save/Load Simulation Controls
+    if st.session_state.get('authenticated', False):
+        with st.expander("💾 Save / Load Simulations", expanded=False):
+            col1, col2 = st.columns([1, 1])
+            
+            with col1:
+                st.subheader("📥 Load Simulation")
+                
+                # Get user's saved simulations
+                user_sims = get_user_simulations(st.session_state.user_id, limit=20)
+                
+                if user_sims:
+                    sim_options = {f"{sim.name} ({sim.created_at.strftime('%Y-%m-%d %H:%M')})": sim.id for sim in user_sims}
+                    
+                    selected_sim_name = st.selectbox(
+                        "Select a saved simulation",
+                        options=[""] + list(sim_options.keys()),
+                        key="load_sim_selector"
+                    )
+                    
+                    col_load, col_delete = st.columns([1, 1])
+                    
+                    with col_load:
+                        if st.button("Load", type="primary", disabled=not selected_sim_name, use_container_width=True):
+                            if selected_sim_name:
+                                sim_id = sim_options[selected_sim_name]
+                                success, data = load_simulation(sim_id, st.session_state.user_id)
+                                
+                                if success:
+                                    state = data['state']
+                                    
+                                    # Restore all session state variables
+                                    if 'parameters' in state:
+                                        params = state['parameters']
+                                        
+                                        # Restore base currency values
+                                        st.session_state.base_liquid_wealth = params.get('initial_liquid_wealth', 50000)
+                                        st.session_state.base_property_value = params.get('initial_property_value', 0)
+                                        st.session_state.base_mortgage = params.get('initial_mortgage', 0)
+                                        st.session_state.base_annual_income = params.get('gross_annual_income', 60000)
+                                        st.session_state.base_monthly_expenses = params.get('monthly_expenses', 2500)
+                                        
+                                        # Restore currency
+                                        st.session_state.selected_currency = params.get('currency', 'EUR')
+                                        
+                                        # Restore age settings
+                                        if 'starting_age' in params:
+                                            st.session_state.current_age = params['starting_age']
+                                        if 'retirement_age' in params:
+                                            st.session_state.target_retirement_age = params['retirement_age']
+                                        
+                                        # Restore budget integration if available
+                                        if 'budget_monthly_expenses' in params:
+                                            st.session_state.budget_monthly_expenses = params['budget_monthly_expenses']
+                                        if 'budget_events_list' in params:
+                                            st.session_state.budget_events_list = params['budget_events_list']
+                                        if 'use_budget_builder' in params:
+                                            st.session_state.use_budget_builder = params['use_budget_builder']
+                                    
+                                    # Restore results if available
+                                    if 'results_data' in state:
+                                        # Convert lists back to numpy arrays
+                                        results_data = state['results_data']
+                                        restored_results = {}
+                                        for key, value in results_data.items():
+                                            if isinstance(value, list):
+                                                restored_results[key] = np.array(value)
+                                            else:
+                                                restored_results[key] = value
+                                        
+                                        st.session_state.results = restored_results
+                                        st.session_state.sim_complete = True
+                                        st.session_state.starting_age = state['parameters'].get('starting_age', 30)
+                                        st.session_state.retirement_age = state['parameters'].get('retirement_age', 65)
+                                        st.session_state.simulation_years = state['parameters'].get('simulation_years', 35)
+                                        st.session_state.base_events = state['parameters'].get('events', [])
+                                    
+                                    # Set indicator for loaded simulation
+                                    st.session_state.loaded_simulation_name = data['name']
+                                    st.session_state.loaded_simulation_id = sim_id
+                                    
+                                    st.success(f"✅ Loaded: {data['name']}")
+                                    st.rerun()
+                                else:
+                                    st.error(f"❌ {data}")
+                    
+                    with col_delete:
+                        if st.button("Delete", type="secondary", disabled=not selected_sim_name, use_container_width=True):
+                            if selected_sim_name:
+                                sim_id = sim_options[selected_sim_name]
+                                success, message = delete_simulation(sim_id, st.session_state.user_id)
+                                if success:
+                                    st.success(f"✅ {message}")
+                                    st.rerun()
+                                else:
+                                    st.error(f"❌ {message}")
+                else:
+                    st.info("No saved simulations yet. Run a simulation and save it!")
+            
+            with col2:
+                st.subheader("💾 Save Current Simulation")
+                
+                if st.session_state.get('sim_complete', False):
+                    save_name = st.text_input(
+                        "Simulation Name",
+                        value=f"Simulation {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+                        key="save_sim_name"
+                    )
+                    
+                    if st.button("Save Simulation", type="primary", use_container_width=True):
+                        # Gather all current state
+                        results = st.session_state.get('results', {})
+                        
+                        # Convert numpy arrays to lists for JSON serialization
+                        results_data = {}
+                        for key, value in results.items():
+                            if isinstance(value, np.ndarray):
+                                results_data[key] = value.tolist()
+                            else:
+                                results_data[key] = value
+                        
+                        # Calculate summary statistics
+                        final_median_net_worth = float(np.median(results['net_worth'][:, -1])) if 'net_worth' in results else 0
+                        initial_net_worth = results['net_worth'][:, 0] if 'net_worth' in results else np.array([0])
+                        final_values = results['net_worth'][:, -1] if 'net_worth' in results else np.array([0])
+                        probability_of_success = float((final_values > initial_net_worth[0]).mean()) if len(final_values) > 0 else 0
+                        
+                        simulation_state = {
+                            'parameters': {
+                                'name': save_name,
+                                'currency': st.session_state.get('selected_currency', 'EUR'),
+                                'initial_liquid_wealth': st.session_state.get('base_liquid_wealth', 50000),
+                                'initial_property_value': st.session_state.get('base_property_value', 0),
+                                'initial_mortgage': st.session_state.get('base_mortgage', 0),
+                                'gross_annual_income': st.session_state.get('base_annual_income', 60000),
+                                'monthly_expenses': st.session_state.get('base_monthly_expenses', 2500),
+                                'events': st.session_state.get('base_events', []),
+                                'starting_age': st.session_state.get('starting_age', 30),
+                                'retirement_age': st.session_state.get('retirement_age', 65),
+                                'simulation_years': st.session_state.get('simulation_years', 35),
+                                'budget_monthly_expenses': st.session_state.get('budget_monthly_expenses'),
+                                'budget_events_list': st.session_state.get('budget_events_list', []),
+                                'use_budget_builder': st.session_state.get('use_budget_builder', False),
+                            },
+                            'results_data': results_data,
+                            'results': {
+                                'final_median_net_worth': final_median_net_worth,
+                                'probability_of_success': probability_of_success,
+                            }
+                        }
+                        
+                        success, result = save_full_simulation(
+                            st.session_state.user_id,
+                            save_name,
+                            simulation_state
+                        )
+                        
+                        if success:
+                            st.success(f"✅ Saved as: {save_name}")
+                        else:
+                            st.error(f"❌ Error: {result}")
+                else:
+                    st.info("Run a simulation first to save it")
 
     # ============================================================================
     # ALL SIDEBAR CONTROLS
@@ -1366,6 +1554,12 @@ with tab1:
 
     # RUN SIMULATION BUTTON
     if st.sidebar.button("🚀 Run Simulation", type="primary", disabled=not can_simulate, use_container_width=True):
+        # Clear loaded simulation indicator when running a new simulation
+        if 'loaded_simulation_name' in st.session_state:
+            del st.session_state.loaded_simulation_name
+        if 'loaded_simulation_id' in st.session_state:
+            del st.session_state.loaded_simulation_id
+            
         with st.spinner(f"Running {simulation_years}-year simulation..."):
             # Use base currency values for simulation
             sim_liquid_wealth = st.session_state.base_liquid_wealth
@@ -1753,16 +1947,39 @@ with tab1:
                 )
                 st.caption("⚠️ PDF unavailable - use Excel export")
 
-
-        # Add cash flow summary
-        st.subheader("Annual Cash Flow Available for Savings")
+        # Annual Cash Flow Summary - Combined Section
+        st.markdown("---")
+        st.subheader("Annual Cash Flow Summary")
         
-        # Calculate median available cash flow over time
-        # We need to recalculate this based on the simulation parameters
+        # Calculate Year 1 cash flow
+        pension_contrib = gross_annual_income * pension_contribution_rate
+        tax = gross_annual_income * effective_tax_rate
+        take_home = gross_annual_income - pension_contrib - tax
+        annual_expenses_calc = monthly_expenses * 12
+        annual_mortgage_calc = calculated_payment * 12
+        annual_available_yr1 = take_home - annual_expenses_calc - annual_mortgage_calc
+        
+        # Check for property events that will change mortgage payments
+        future_mortgage_changes = []
+        for event in events:
+            if event.get('type') == 'property_purchase':
+                future_mortgage_changes.append({
+                    'year': event['year'],
+                    'new_payment': event['new_mortgage_payment'],
+                    'description': event['name']
+                })
+            elif event.get('type') == 'property_sale':
+                future_mortgage_changes.append({
+                    'year': event['year'],
+                    'new_payment': 0,
+                    'description': event['name']
+                })
+        
+        # Row 1: Year 1 breakdown and metrics
         col1, col2 = st.columns(2)
         
         with col1:
-            st.markdown("**Current Year 1 Cash Flow**")
+            st.markdown("**Year 1 Cash Flow Breakdown**")
             year1_income = gross_annual_income
             year1_pension = year1_income * pension_contribution_rate
             year1_tax = year1_income * effective_tax_rate
@@ -1792,83 +2009,7 @@ with tab1:
                 st.success(f"✓ Annual savings: {format_currency(year1_available, selected_currency)} ({format_currency(year1_available/12, selected_currency)}/month)")
         
         with col2:
-            st.markdown("**Liquid Wealth Warning Check**")
-            min_liquid = np.median(results['liquid_wealth'], axis=0).min()
-            if show_real:
-                inflation_adj = np.concatenate([[1], np.cumprod(1 + np.median(results['inflation_rates'], axis=0))])
-                min_liquid = (np.median(results['liquid_wealth'], axis=0) / inflation_adj).min()
-            
-            if min_liquid < 0:
-                st.error(f"⚠️ Liquid wealth goes negative!\nMinimum: {format_currency(min_liquid, selected_currency)}")
-                st.markdown("**Recommendations:**")
-                st.markdown("- Reduce monthly expenses")
-                st.markdown("- Reduce monthly savings target")
-                st.markdown("- Increase income")
-                st.markdown("- Review major financial events")
-            else:
-                st.success(f"✓ Liquid wealth stays positive\nMinimum: {format_currency(min_liquid, selected_currency)}")
-                
-            # Show final liquid wealth
-            final_liquid = np.median(results['liquid_wealth'], axis=0)[-1]
-            if show_real:
-                final_liquid = final_liquid / inflation_adj[-1]
-            st.metric("Median Final Liquid Wealth", format_currency(final_liquid, selected_currency))
-    
-
-        st.subheader(f"Net Worth by Age Milestones")
-        
-        milestone_years = [5, 10, 15, 20, 25, 30]
-        milestone_data = []
-        
-        for year in milestone_years:
-            if year <= simulation_years:
-                age_at_milestone = starting_age + year
-                year_wealth = display_results['net_worth'][:, year]
-                
-                milestone_data.append({
-                    'Year': year,
-                    'Age': age_at_milestone,
-                    '10th': format_currency(np.percentile(year_wealth, 10), selected_currency),
-                    '25th': format_currency(np.percentile(year_wealth, 25), selected_currency),
-                    '50th': format_currency(np.percentile(year_wealth, 50), selected_currency),
-                    '75th': format_currency(np.percentile(year_wealth, 75), selected_currency),
-                    '90th': format_currency(np.percentile(year_wealth, 90), selected_currency),
-                })
-        
-        milestone_df = pd.DataFrame(milestone_data)
-        st.dataframe(milestone_df, use_container_width=True, hide_index=True)
-
-        # Annual Cash Flow Summary
-        st.markdown("---")
-        st.subheader("Annual Cash Flow Summary")
-        
-        # Calculate Year 1 cash flow
-        pension_contrib = gross_annual_income * pension_contribution_rate
-        tax = gross_annual_income * effective_tax_rate
-        take_home = gross_annual_income - pension_contrib - tax
-        annual_expenses_calc = monthly_expenses * 12
-        annual_mortgage_calc = calculated_payment * 12
-        annual_available_yr1 = take_home - annual_expenses_calc - annual_mortgage_calc
-        
-        # Check for property events that will change mortgage payments
-        future_mortgage_changes = []
-        for event in events:
-            if event.get('type') == 'property_purchase':
-                future_mortgage_changes.append({
-                    'year': event['year'],
-                    'new_payment': event['new_mortgage_payment'],
-                    'description': event['name']
-                })
-            elif event.get('type') == 'property_sale':
-                future_mortgage_changes.append({
-                    'year': event['year'],
-                    'new_payment': 0,
-                    'description': event['name']
-                })
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
+            st.markdown("**Key Metrics**")
             st.metric(
                 "Year 1 Net Income",
                 format_currency(take_home, selected_currency),
@@ -1879,8 +2020,6 @@ with tab1:
                 format_currency(annual_expenses_calc + annual_mortgage_calc, selected_currency),
                 help="Living expenses plus mortgage payments"
             )
-            
-        with col2:
             st.metric(
                 "Year 1 Available Savings",
                 format_currency(annual_available_yr1, selected_currency),
@@ -1890,6 +2029,37 @@ with tab1:
             
             if future_mortgage_changes:
                 st.info(f"📅 {len(future_mortgage_changes)} property event(s) will change mortgage payments")
+        
+        # Row 2: Liquid wealth check
+        st.markdown("**Liquid Wealth Status**")
+        col1, col2, col3 = st.columns(3)
+        
+        min_liquid = np.median(results['liquid_wealth'], axis=0).min()
+        if show_real:
+            inflation_adj = np.concatenate([[1], np.cumprod(1 + np.median(results['inflation_rates'], axis=0))])
+            min_liquid = (np.median(results['liquid_wealth'], axis=0) / inflation_adj).min()
+        
+        final_liquid = np.median(results['liquid_wealth'], axis=0)[-1]
+        if show_real:
+            final_liquid = final_liquid / inflation_adj[-1]
+        
+        with col1:
+            if min_liquid < 0:
+                st.error(f"⚠️ Liquid wealth goes negative!")
+                st.metric("Minimum Liquid Wealth", format_currency(min_liquid, selected_currency))
+            else:
+                st.success(f"✓ Liquid wealth stays positive")
+                st.metric("Minimum Liquid Wealth", format_currency(min_liquid, selected_currency))
+        
+        with col2:
+            st.metric("Median Final Liquid Wealth", format_currency(final_liquid, selected_currency))
+        
+        with col3:
+            if min_liquid < 0:
+                st.markdown("**Recommendations:**")
+                st.markdown("- Reduce monthly expenses")
+                st.markdown("- Increase income")
+                st.markdown("- Review major events")
         
         # Cash Flow Projection with Financial Events
         st.markdown("---")
@@ -1981,6 +2151,31 @@ with tab1:
         
         st.caption("💡 Take-home income grows with salary inflation. Expenses and mortgage shown in nominal dollars (not inflation-adjusted).")
         st.caption("📝 Events: 🏠 Property Purchase, 💰 Property Sale, 📊 Expense Change, 🏘️ Rental Income, 💸 One-Time Expense, 💵 Windfall")
+        
+        # Net Worth by Age Milestones
+        st.markdown("---")
+        st.subheader("Net Worth by Age Milestones")
+        
+        milestone_years = [5, 10, 15, 20, 25, 30]
+        milestone_data = []
+        
+        for year in milestone_years:
+            if year <= simulation_years:
+                age_at_milestone = starting_age + year
+                year_wealth = display_results['net_worth'][:, year]
+                
+                milestone_data.append({
+                    'Year': year,
+                    'Age': age_at_milestone,
+                    '10th': format_currency(np.percentile(year_wealth, 10), selected_currency),
+                    '25th': format_currency(np.percentile(year_wealth, 25), selected_currency),
+                    '50th': format_currency(np.percentile(year_wealth, 50), selected_currency),
+                    '75th': format_currency(np.percentile(year_wealth, 75), selected_currency),
+                    '90th': format_currency(np.percentile(year_wealth, 90), selected_currency),
+                })
+        
+        milestone_df = pd.DataFrame(milestone_data)
+        st.dataframe(milestone_df, use_container_width=True, hide_index=True)
         
         # Distribution at key years
         st.markdown("---")

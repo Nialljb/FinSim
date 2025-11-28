@@ -162,6 +162,7 @@ class SavedBudget(Base):
     # Budget metadata
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
+    currency = Column(String(10), nullable=True)  # Currency code (EUR, USD, etc.)
     
     # Budget data (JSON)
     budget_now = Column(JSON, nullable=False)
@@ -265,7 +266,7 @@ def get_age_range(age):
     else:
         return "65+"
 
-def save_budget(user_id, name, budget_now, budget_1yr, budget_5yr, life_events=None, description=None):
+def save_budget(user_id, name, budget_now, budget_1yr, budget_5yr, life_events=None, description=None, currency='EUR'):
     """Save a budget configuration"""
     db = SessionLocal()
     try:
@@ -273,6 +274,7 @@ def save_budget(user_id, name, budget_now, budget_1yr, budget_5yr, life_events=N
             user_id=user_id,
             name=name,
             description=description,
+            currency=currency,
             budget_now=budget_now,
             budget_1yr=budget_1yr,
             budget_5yr=budget_5yr,
@@ -298,6 +300,36 @@ def get_user_budgets(user_id, limit=10):
             SavedBudget.is_active == True
         ).order_by(SavedBudget.created_at.desc()).limit(limit).all()
         return budgets
+    finally:
+        db.close()
+
+
+def load_budget(user_id, budget_id):
+    """Load a specific budget by ID"""
+    db = SessionLocal()
+    try:
+        budget = db.query(SavedBudget).filter(
+            SavedBudget.id == budget_id,
+            SavedBudget.user_id == user_id,
+            SavedBudget.is_active == True
+        ).first()
+        
+        if budget:
+            return True, {
+                'id': budget.id,
+                'name': budget.name,
+                'description': budget.description,
+                'currency': budget.currency or 'EUR',  # Default to EUR if not set
+                'budget_now': budget.budget_now,
+                'budget_1yr': budget.budget_1yr,
+                'budget_5yr': budget.budget_5yr,
+                'life_events': budget.life_events or [],
+                'created_at': budget.created_at.isoformat() if budget.created_at else None
+            }
+        else:
+            return False, "Budget not found"
+    except Exception as e:
+        return False, str(e)
     finally:
         db.close()
 
