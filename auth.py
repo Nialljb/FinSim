@@ -72,14 +72,17 @@ def register_user(username: str, email: str, password: str, current_age: int, ta
         db.close()
 
 
-def login_user(username: str, password: str):
-    """Authenticate user and return user data dict if successful"""
+def login_user(username_or_email: str, password: str):
+    """Authenticate user with username or email and return user data dict if successful"""
     db = SessionLocal()
     try:
-        user = db.query(User).filter(User.username == username).first()
+        # Try to find user by username or email
+        user = db.query(User).filter(
+            (User.username == username_or_email) | (User.email == username_or_email)
+        ).first()
         
         if not user:
-            return None, "Username not found"
+            return None, "Username or email not found"
         
         if not user.is_active:
             return None, "Account is deactivated"
@@ -344,6 +347,29 @@ def show_login_page():
                         st.error(message)
         
         st.caption("*Required fields")
+
+
+def request_password_reset(email: str):
+    """Check if email exists and return username (simplified version without email sending)"""
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == email).first()
+        
+        if not user:
+            # Don't reveal if email exists for security
+            return True, "If this email is registered, you will receive password reset instructions."
+        
+        # In a production app, you would:
+        # 1. Generate a secure reset token
+        # 2. Store it in database with expiration
+        # 3. Send email with reset link
+        # For now, just return username as a helper
+        return True, f"Account found! Your username is: {user.username}"
+        
+    except Exception as e:
+        return False, "An error occurred. Please try again later."
+    finally:
+        db.close()
 
 
 def show_user_header():

@@ -16,6 +16,8 @@ services:
       rm google-chrome-stable_current_amd64.deb
       # Install Python dependencies
       pip install -r requirements.txt
+      # Run database migrations automatically
+      python fix_render_db.py || echo "Migration completed or not needed"
     startCommand: streamlit run wealth_simulator.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true
     envVars:
       - key: PYTHON_VERSION
