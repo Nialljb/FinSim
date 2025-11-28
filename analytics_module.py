@@ -4,7 +4,7 @@ Returns DataFrames instead of writing files for compatibility with ephemeral fil
 """
 
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timezone
 from database import SessionLocal, User, Simulation
 import json
 
@@ -29,7 +29,7 @@ def generate_user_demographics_df(db=None):
                 'country': user.country,
                 'account_created': user.created_at.strftime('%Y-%m-%d') if user.created_at else None,
                 'last_active': user.last_login.strftime('%Y-%m-%d') if user.last_login else None,
-                'account_age_days': (datetime.now() - user.created_at).days if user.created_at else None
+                'account_age_days': (datetime.now(timezone.utc) - user.created_at).days if user.created_at else None
             })
         
         return pd.DataFrame(user_data)

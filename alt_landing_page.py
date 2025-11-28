@@ -416,7 +416,7 @@ def show_landing_page():
                             st.error(message)
             
             # Demo account info
-            st.info("💡 **Try it out:**\n\nUsername: `testuser`\n\nPassword: `password123`")
+            # st.info("💡 **Try it out:**\n\nUsername: `testuser`\n\nPassword: `password123`")
             st.caption("Forgot your password? Use the 'Forgot Password' tab.")
         
         with tab2:
