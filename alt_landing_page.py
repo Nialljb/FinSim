@@ -18,7 +18,7 @@ def show_landing_page():
     # Force wide layout and light theme
     st.set_page_config(
         page_title="FinSim - Financial Planning Simulator",
-        page_icon="🦉",
+        page_icon="🐬",
         layout="wide",
         # initial_sidebar_state="collapsed"  # Hide sidebar on landing page
     )
@@ -346,7 +346,7 @@ def show_landing_page():
     # Hero Section
     st.markdown("""
         <div class="hero">
-            <h1>🦉 FinSim</h1>
+            <h1>🐬 FinSim</h1>
             <div class="hero-subtitle">Plan Your Financial Future with Confidence</div>
             <div class="hero-description">
                 Monte Carlo simulations • Retirement planning • Real estate modeling • Multi-currency support • 100% Free
@@ -358,7 +358,7 @@ def show_landing_page():
     st.markdown("""
         <div class="stat-container">
             <div class="stat-box">
-                <div class="stat-number">100+</div>
+                <div class="stat-number">1000+</div>
                 <div class="stat-label">Simulations Run</div>
             </div>
             <div class="stat-box">
@@ -378,9 +378,9 @@ def show_landing_page():
     
     st.markdown("---")
     
-    # Info about session persistence
-    if not st.session_state.get('authenticated'):
-        st.info("💡 **Tip:** Your session will remain active during your browser session. Closing the browser will require you to log in again.")
+    # # Info about session persistence
+    # if not st.session_state.get('authenticated'):
+    #     st.info("💡 **Tip:** Your session will remain active during your browser session. Closing the browser will require you to log in again.")
     
     # Session persistence script and hidden data elements
     st.markdown(get_session_persistence_script(), unsafe_allow_html=True)
