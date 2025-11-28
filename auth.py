@@ -217,8 +217,20 @@ def increment_export_count(user_id: int):
         db.close()
 
 
-def check_simulation_limit(user_id: int, limit: int = 5) -> tuple:
-    """Check if user has reached simulation limit"""
+def check_simulation_limit(user_id: int, limit: int = 10, is_admin: bool = False) -> tuple:
+    """Check if user has reached simulation limit
+    
+    Args:
+        user_id: User ID to check
+        limit: Maximum simulations allowed (default 10 for standard users)
+        is_admin: If True, grants unlimited simulations
+    
+    Returns:
+        tuple: (can_simulate, remaining, message)
+    """
+    if is_admin:
+        return True, -1, "✓ Unlimited simulations (Admin)"
+    
     stats_data = get_user_usage_stats(user_id)
     remaining = limit - stats_data['simulations_this_month']
     
@@ -226,6 +238,35 @@ def check_simulation_limit(user_id: int, limit: int = 5) -> tuple:
         return False, 0, "Monthly simulation limit reached"
     else:
         return True, remaining, f"{remaining} simulations remaining this month"
+
+
+def reset_simulation_count(user_id: int):
+    """Reset simulation count to 0 for user (for requesting more simulations)
+    
+    In the future, this will be tied to subscription/payment system.
+    For now, it simply resets the counter to allow 10 more simulations.
+    """
+    db = SessionLocal()
+    try:
+        current_month = datetime.now().strftime("%Y-%m")
+        
+        stats = db.query(UsageStats).filter(
+            UsageStats.user_id == user_id,
+            UsageStats.current_month == current_month
+        ).first()
+        
+        if stats:
+            stats.simulations_this_month = 0
+            db.commit()
+            return True, "Simulation count reset! You have 10 new simulations."
+        else:
+            return False, "Unable to find usage statistics."
+        
+    except Exception as e:
+        db.rollback()
+        return False, f"Error resetting count: {str(e)}"
+    finally:
+        db.close()
 
 
 def initialize_session_state():
