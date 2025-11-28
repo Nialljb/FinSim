@@ -12,7 +12,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 import plotly.io as pio
-from auth import initialize_session_state, show_login_page, show_user_header, check_simulation_limit, increment_simulation_count, increment_export_count
+from auth import initialize_session_state, show_login_page, show_user_header, check_simulation_limit, increment_simulation_count, increment_export_count, reset_simulation_count
 from data_tracking import save_simulation, save_full_simulation, load_simulation, get_user_simulations, delete_simulation, update_simulation_name
 from database import init_db
 from alt_landing_page import show_landing_page
@@ -1555,7 +1555,13 @@ with tab1:
 
     # Usage limits
     if st.session_state.get('authenticated', False):
-        can_simulate, remaining, message = check_simulation_limit(st.session_state.user_id, limit=99)
+        # Check if user is admin
+        is_admin = st.session_state.get('username') in admin_users
+        can_simulate, remaining, message = check_simulation_limit(
+            st.session_state.user_id, 
+            limit=5,  # Standard users get 5 simulations
+            is_admin=is_admin
+        )
     else:
         can_simulate = True
         message = "✓ Ready to simulate"
@@ -1563,6 +1569,14 @@ with tab1:
     st.sidebar.markdown("---")
     if not can_simulate:
         st.sidebar.error(message)
+        # Show "Request More Simulations" button when limit reached
+        if st.sidebar.button("🔄 Request More Simulations", type="secondary", use_container_width=True):
+            success, reset_message = reset_simulation_count(st.session_state.user_id)
+            if success:
+                st.sidebar.success(reset_message)
+                st.rerun()
+            else:
+                st.sidebar.error(reset_message)
     else:
         st.sidebar.success(message)
 
