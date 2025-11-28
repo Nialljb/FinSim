@@ -5,7 +5,7 @@ Requires admin authentication
 """
 
 import streamlit as st
-from database import SessionLocal, User, Simulation, SavedBudget, UsageStats
+from database import SessionLocal, User, Simulation, SavedBudget, UsageStats, Feedback
 from analytics_module import (
     export_all_analytics,
     generate_user_demographics_df,
@@ -80,12 +80,13 @@ def show_admin_analytics():
     st.markdown("---")
     
     # Tabs for different analytics views
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "📥 Export Data", 
         "👥 User Analytics", 
         "💰 Financial Analytics",
         "📊 Raw Database",
-        "🔍 Custom Queries"
+        "🔍 Custom Queries",
+        "💬 User Feedback"
     ])
     
     # ========== TAB 1: EXPORT DATA ==========
@@ -380,6 +381,167 @@ def show_admin_analytics():
                     st.error(f"❌ Query Error: {str(e)}")
                 finally:
                     db.close()
+    
+    # ========== TAB 6: USER FEEDBACK ==========
+    with tab6:
+        st.subheader("💬 User Feedback & Issues")
+        st.markdown("View and manage user feedback submissions")
+        
+        db = SessionLocal()
+        try:
+            # Filter options
+            col1, col2, col3 = st.columns([1, 1, 1])
+            
+            with col1:
+                status_filter = st.selectbox(
+                    "Status",
+                    ["All", "new", "reviewed", "resolved", "closed"],
+                    index=0
+                )
+            
+            with col2:
+                type_filter = st.selectbox(
+                    "Type",
+                    ["All", "bug", "feature", "general", "issue"],
+                    index=0
+                )
+            
+            with col3:
+                sort_by = st.selectbox(
+                    "Sort By",
+                    ["Newest First", "Oldest First", "Type"],
+                    index=0
+                )
+            
+            # Build query
+            query = db.query(Feedback).join(User)
+            
+            if status_filter != "All":
+                query = query.filter(Feedback.status == status_filter)
+            
+            if type_filter != "All":
+                query = query.filter(Feedback.feedback_type == type_filter)
+            
+            # Sort
+            if sort_by == "Newest First":
+                query = query.order_by(Feedback.created_at.desc())
+            elif sort_by == "Oldest First":
+                query = query.order_by(Feedback.created_at.asc())
+            else:
+                query = query.order_by(Feedback.feedback_type, Feedback.created_at.desc())
+            
+            feedbacks = query.all()
+            
+            st.markdown(f"**Showing {len(feedbacks)} feedback items**")
+            
+            if len(feedbacks) == 0:
+                st.info("No feedback submissions found")
+            else:
+                # Display feedback items
+                for feedback in feedbacks:
+                    user = db.query(User).filter(User.id == feedback.user_id).first()
+                    
+                    # Status emoji
+                    status_emoji = {
+                        'new': '🆕',
+                        'reviewed': '👀',
+                        'resolved': '✅',
+                        'closed': '🔒'
+                    }
+                    
+                    # Type emoji
+                    type_emoji = {
+                        'bug': '🐛',
+                        'feature': '💡',
+                        'general': '💬',
+                        'issue': '⚠️'
+                    }
+                    
+                    with st.expander(
+                        f"{status_emoji.get(feedback.status, '📝')} {type_emoji.get(feedback.feedback_type, '📝')} "
+                        f"{feedback.subject} - @{user.username if user else 'Unknown'} "
+                        f"({feedback.created_at.strftime('%Y-%m-%d %H:%M')})"
+                    ):
+                        col_a, col_b = st.columns([2, 1])
+                        
+                        with col_a:
+                            st.markdown(f"**Type:** {feedback.feedback_type.title()}")
+                            st.markdown(f"**Status:** {feedback.status.title()}")
+                            st.markdown(f"**User:** {user.username if user else 'Unknown'} ({feedback.user_email or 'No email'})")
+                            if feedback.page_context:
+                                st.markdown(f"**Context:** {feedback.page_context}")
+                            st.markdown(f"**Submitted:** {feedback.created_at.strftime('%Y-%m-%d %H:%M:%S')}")
+                        
+                        with col_b:
+                            # Quick actions
+                            new_status = st.selectbox(
+                                "Update Status",
+                                ["new", "reviewed", "resolved", "closed"],
+                                index=["new", "reviewed", "resolved", "closed"].index(feedback.status),
+                                key=f"status_{feedback.id}"
+                            )
+                            
+                            if st.button("💾 Save Status", key=f"save_{feedback.id}"):
+                                feedback.status = new_status
+                                if new_status == "resolved":
+                                    feedback.resolved_at = datetime.now()
+                                db.commit()
+                                st.success("Status updated!")
+                                st.rerun()
+                        
+                        st.markdown("---")
+                        st.markdown("**Message:**")
+                        st.markdown(feedback.message)
+                        
+                        if feedback.admin_notes:
+                            st.markdown("**Admin Notes:**")
+                            st.info(feedback.admin_notes)
+                        
+                        # Add admin notes
+                        admin_notes = st.text_area(
+                            "Admin Notes",
+                            value=feedback.admin_notes or "",
+                            key=f"notes_{feedback.id}",
+                            height=100
+                        )
+                        
+                        if st.button("💾 Save Notes", key=f"save_notes_{feedback.id}"):
+                            feedback.admin_notes = admin_notes
+                            db.commit()
+                            st.success("Notes saved!")
+                            st.rerun()
+                
+                # Export option
+                st.markdown("---")
+                if st.button("📥 Export All Feedback to CSV"):
+                    feedback_data = []
+                    for feedback in feedbacks:
+                        user = db.query(User).filter(User.id == feedback.user_id).first()
+                        feedback_data.append({
+                            'ID': feedback.id,
+                            'Type': feedback.feedback_type,
+                            'Status': feedback.status,
+                            'Subject': feedback.subject,
+                            'Message': feedback.message,
+                            'Username': user.username if user else 'Unknown',
+                            'Email': feedback.user_email or '',
+                            'Context': feedback.page_context or '',
+                            'Created': feedback.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                            'Resolved': feedback.resolved_at.strftime('%Y-%m-%d %H:%M:%S') if feedback.resolved_at else '',
+                            'Admin Notes': feedback.admin_notes or ''
+                        })
+                    
+                    feedback_df = pd.DataFrame(feedback_data)
+                    csv = feedback_df.to_csv(index=False)
+                    st.download_button(
+                        label="📥 Download Feedback CSV",
+                        data=csv,
+                        file_name=f"feedback_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv"
+                    )
+        
+        finally:
+            db.close()
 
 
 # Call the main function directly (not in __main__ block for Streamlit multipage)
