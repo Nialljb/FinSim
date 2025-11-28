@@ -249,11 +249,33 @@ def show_landing_page():
         .stTabs [data-baseweb="tab"] {
             color: #4a5568;
             background-color: transparent;
+            font-size: 1.1rem;
+            font-weight: 500;
         }
         
         .stTabs [aria-selected="true"] {
             color: #667eea;
             border-bottom-color: #667eea;
+        }
+        
+        /* Larger font for form labels and inputs */
+        .auth-section label {
+            font-size: 1.05rem !important;
+            font-weight: 500 !important;
+        }
+        
+        .auth-section input {
+            font-size: 1rem !important;
+        }
+        
+        .auth-section .stTextInput label,
+        .auth-section .stNumberInput label {
+            font-size: 1.05rem !important;
+        }
+        
+        /* Larger font for form section headers */
+        .auth-section .stMarkdown p strong {
+            font-size: 1.1rem !important;
         }
         
                 /* Remove extra spacing around tabs */
@@ -280,12 +302,35 @@ def show_landing_page():
         
         /* Remove empty div spacing */
         div[data-testid="stVerticalBlock"] > div:empty {
-            display: none;
+            display: none !important;
+        }
+        
+        /* Remove empty elements before auth section */
+        .auth-section > div:empty,
+        .auth-section > div > div:empty {
+            display: none !important;
         }
         
         /* Tighten up auth section */
         .auth-section > div:first-child {
             margin-top: 0 !important;
+            padding-top: 0 !important;
+        }
+        
+        .auth-section h3 {
+            margin-top: 0 !important;
+            padding-top: 0 !important;
+        }
+        
+        /* Remove spacing around markdown elements in auth section */
+        .auth-section [data-testid="stMarkdown"] {
+            margin-top: 0 !important;
+            padding-top: 0 !important;
+        }
+        
+        /* Remove any extra vertical blocks */
+        [data-testid="column"] > [data-testid="stVerticalBlock"] > div:first-child:empty {
+            display: none !important;
         }
         
         /* Info/warning boxes - ensure visibility in light theme */
@@ -335,8 +380,11 @@ def show_landing_page():
     col_left, col_spacer, col_right = st.columns([5, 1, 6])
     
     with col_left:
-        st.markdown('<div class="auth-section">', unsafe_allow_html=True)
-        st.markdown("### 🔐 Get Started")
+        st.markdown('''
+        <div class="auth-section">
+            <h3 style="margin-top: 0; padding-top: 0;">🔐 Get Started</h3>
+        </div>
+        ''', unsafe_allow_html=True)
         
         tab1, tab2 = st.tabs(["Login", "Create Account"])
         
@@ -424,8 +472,6 @@ def show_landing_page():
                             st.info("👉 Switch to Login tab")
                         else:
                             st.error(message)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
     
     with col_right:
         st.markdown("### ✨ Key Features")

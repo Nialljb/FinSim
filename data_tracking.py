@@ -83,6 +83,148 @@ def save_simulation(user_id: int, simulation_params: dict, results: dict = None)
         db.close()
 
 
+def save_full_simulation(user_id: int, name: str, simulation_state: dict):
+    """
+    Save complete simulation state for later loading
+    Includes all parameters, results, and session state needed to restore simulation
+    
+    Args:
+        user_id: User ID
+        name: Name for this saved simulation
+        simulation_state: Complete state dictionary with all parameters and results
+    """
+    db = SessionLocal()
+    try:
+        # Extract parameters for anonymization
+        params = simulation_state.get('parameters', {})
+        currency = params.get('currency', 'EUR')
+        initial_liquid = params.get('initial_liquid_wealth', 0)
+        initial_property = params.get('initial_property_value', 0)
+        income = params.get('gross_annual_income', 0)
+        events = params.get('events', [])
+        
+        # Anonymize data
+        wealth_bracket = get_wealth_bracket(initial_liquid)
+        property_bracket = get_wealth_bracket(initial_property)
+        income_bracket = get_income_bracket(income)
+        
+        # Analyze events
+        has_property_purchase = any(e.get('type') == 'property_purchase' for e in events)
+        has_property_sale = any(e.get('type') == 'property_sale' for e in events)
+        has_children = any(e.get('type') == 'expense_change' and 'child' in e.get('name', '').lower() for e in events)
+        has_international_move = any('move' in e.get('name', '').lower() or 'dublin' in e.get('name', '').lower() or 'international' in e.get('name', '').lower() for e in events)
+        
+        # Calculate final net worth if results exist
+        final_net_worth_bracket = None
+        probability_of_success = None
+        
+        results = simulation_state.get('results')
+        if results and 'final_median_net_worth' in results:
+            final_net_worth_bracket = get_wealth_bracket(results['final_median_net_worth'])
+            probability_of_success = results.get('probability_of_success')
+        
+        # Create simulation record with full state in parameters
+        simulation = Simulation(
+            user_id=user_id,
+            name=name,
+            currency=currency,
+            initial_liquid_wealth_bracket=wealth_bracket,
+            initial_property_value_bracket=property_bracket,
+            income_bracket=income_bracket,
+            parameters=simulation_state,  # Store complete state for restoration
+            has_property_purchase=has_property_purchase,
+            has_property_sale=has_property_sale,
+            has_international_move=has_international_move,
+            has_children=has_children,
+            number_of_events=len(events),
+            final_net_worth_bracket=final_net_worth_bracket,
+            probability_of_success=probability_of_success,
+            created_at=datetime.now()
+        )
+        
+        db.add(simulation)
+        db.commit()
+        db.refresh(simulation)
+        
+        return True, simulation.id
+        
+    except Exception as e:
+        db.rollback()
+        return False, str(e)
+    finally:
+        db.close()
+
+
+def load_simulation(simulation_id: int, user_id: int):
+    """
+    Load a complete simulation state by ID
+    Returns the full state dictionary needed to restore the simulation
+    
+    Args:
+        simulation_id: ID of simulation to load
+        user_id: User ID (for security check)
+    
+    Returns:
+        tuple: (success: bool, data: dict or error_message: str)
+    """
+    db = SessionLocal()
+    try:
+        simulation = db.query(Simulation).filter(
+            Simulation.id == simulation_id,
+            Simulation.user_id == user_id
+        ).first()
+        
+        if not simulation:
+            return False, "Simulation not found or access denied"
+        
+        # Return the complete state
+        return True, {
+            'id': simulation.id,
+            'name': simulation.name,
+            'created_at': simulation.created_at.isoformat() if simulation.created_at else None,
+            'state': simulation.parameters  # Full state stored in parameters field
+        }
+        
+    except Exception as e:
+        return False, str(e)
+    finally:
+        db.close()
+
+
+def update_simulation_name(simulation_id: int, user_id: int, new_name: str):
+    """
+    Update the name of a saved simulation
+    
+    Args:
+        simulation_id: ID of simulation to rename
+        user_id: User ID (for security check)
+        new_name: New name for the simulation
+    
+    Returns:
+        tuple: (success: bool, message: str)
+    """
+    db = SessionLocal()
+    try:
+        simulation = db.query(Simulation).filter(
+            Simulation.id == simulation_id,
+            Simulation.user_id == user_id
+        ).first()
+        
+        if not simulation:
+            return False, "Simulation not found or access denied"
+        
+        simulation.name = new_name
+        db.commit()
+        
+        return True, "Simulation renamed successfully"
+        
+    except Exception as e:
+        db.rollback()
+        return False, str(e)
+    finally:
+        db.close()
+
+
 def get_user_simulations(user_id: int, limit: int = 10):
     """Get user's recent simulations"""
     db = SessionLocal()
