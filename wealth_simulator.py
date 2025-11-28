@@ -925,6 +925,20 @@ with tab1:
     # ALL SIDEBAR CONTROLS
     # ============================================================================
 
+    # Admin Analytics Access (for developers)
+    admin_users = ['admin', 'nbourke']  # Add your admin usernames here
+    if st.session_state.get('username') in admin_users:
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("### 🔧 Developer Tools")
+        if st.sidebar.button("📊 Admin Analytics Dashboard"):
+            # Import and run admin analytics module directly
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("admin_analytics", "admin_analytics.py")
+            admin_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(admin_module)
+            st.stop()
+        st.sidebar.markdown("---")
+
     st.sidebar.header("⚙️ Settings")
     
     # Age settings
