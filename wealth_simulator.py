@@ -1669,13 +1669,13 @@ with tab1:
         
         Your support helps us:
         - 🚀 Add new features
-        - 🌍 Support more currencies
+        - 🎨 Improve the user experience
         - 💾 Keep servers running
     """)
     
     # Ko-fi button with custom styling
     st.sidebar.markdown("""
-        <a href="https://ko-fi.com/YOUR_KOFI_USERNAME" target="_blank">
+        <a href="https://ko-fi.com/nialljb" target="_blank">
             <img src="https://ko-fi.com/img/githubbutton_sm.svg" 
                  alt="Support on Ko-fi" 
                  style="height: 36px; border: 0px;">

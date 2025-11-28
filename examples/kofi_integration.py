@@ -26,7 +26,7 @@ def show_kofi_button():
         }
         </style>
         
-        <a href="https://ko-fi.com/YOUR_KOFI_USERNAME" target="_blank" class="kofi-button">
+        <a href="https://ko-fi.com/nialljb" target="_blank" class="kofi-button">
             ☕ Buy Me a Coffee
         </a>
     """, unsafe_allow_html=True)
