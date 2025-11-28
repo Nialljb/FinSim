@@ -21,6 +21,16 @@ def generate_user_demographics_df(db=None):
         
         user_data = []
         for user in users:
+            # Handle both timezone-aware (PostgreSQL) and timezone-naive (SQLite) datetimes
+            account_age_days = None
+            if user.created_at:
+                now = datetime.now(timezone.utc)
+                created = user.created_at
+                # If created_at is naive, make it aware (assume UTC)
+                if created.tzinfo is None:
+                    created = created.replace(tzinfo=timezone.utc)
+                account_age_days = (now - created).days
+            
             user_data.append({
                 'user_id': user.id,
                 'current_age': user.current_age,
@@ -29,7 +39,7 @@ def generate_user_demographics_df(db=None):
                 'country': user.country,
                 'account_created': user.created_at.strftime('%Y-%m-%d') if user.created_at else None,
                 'last_active': user.last_login.strftime('%Y-%m-%d') if user.last_login else None,
-                'account_age_days': (datetime.now(timezone.utc) - user.created_at).days if user.created_at else None
+                'account_age_days': account_age_days
             })
         
         return pd.DataFrame(user_data)

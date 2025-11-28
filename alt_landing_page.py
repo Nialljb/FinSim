@@ -4,7 +4,9 @@ Handles width, theming, and responsive design better
 """
 
 import streamlit as st
-from auth import initialize_session_state, login_user, register_user, logout, request_password_reset
+from auth import (initialize_session_state, login_user, register_user, logout, 
+                  request_password_reset, create_session_token, restore_session_from_storage,
+                  get_session_persistence_script)
 
 
 def show_landing_page():
@@ -376,6 +378,22 @@ def show_landing_page():
     
     st.markdown("---")
     
+    # Info about session persistence
+    if not st.session_state.get('authenticated'):
+        st.info("💡 **Tip:** Your session will remain active during your browser session. Closing the browser will require you to log in again.")
+    
+    # Session persistence script and hidden data elements
+    st.markdown(get_session_persistence_script(), unsafe_allow_html=True)
+    
+    # Hidden elements for JavaScript communication
+    if st.session_state.get('authenticated'):
+        # Save user_id to localStorage
+        st.markdown(f'<div id="save-session-data" style="display:none">{st.session_state.user_id}</div>', unsafe_allow_html=True)
+    else:
+        # Try to restore session on page load
+        st.markdown('<div id="restore-session-data" style="display:none">null</div>', unsafe_allow_html=True)
+        st.markdown('<div id="session-check-script"></div>', unsafe_allow_html=True)
+    
     # Main content area - Login and Features side by side
     col_left, col_spacer, col_right = st.columns([5, 1, 6])
     
@@ -410,6 +428,10 @@ def show_landing_page():
                             st.session_state.user_email = user_data['email']
                             st.session_state.current_age = user_data['current_age']
                             st.session_state.target_retirement_age = user_data['target_retirement_age']
+                            
+                            # Create session token for persistence (will be saved to localStorage)
+                            create_session_token(user_data['id'])
+                            
                             st.success(message)
                             st.rerun()
                         else:

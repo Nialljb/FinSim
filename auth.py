@@ -5,8 +5,10 @@ Handles user registration, login, and session management
 
 import bcrypt
 import streamlit as st
-from datetime import datetime
+from datetime import datetime, timedelta
 from database import SessionLocal, User, UsageStats
+import hashlib
+import secrets
 
 
 def hash_password(password: str) -> str:
@@ -227,7 +229,9 @@ def check_simulation_limit(user_id: int, limit: int = 5) -> tuple:
 
 
 def initialize_session_state():
-    """Initialize Streamlit session state for authentication"""
+    """Initialize Streamlit session state for authentication with persistence"""
+    
+    # Default initialization if values don't exist
     if 'authenticated' not in st.session_state:
         st.session_state.authenticated = False
     if 'user_id' not in st.session_state:
@@ -240,6 +244,73 @@ def initialize_session_state():
         st.session_state.current_age = None
     if 'target_retirement_age' not in st.session_state:
         st.session_state.target_retirement_age = None
+    if 'session_token' not in st.session_state:
+        st.session_state.session_token = None
+    if 'session_restored' not in st.session_state:
+        st.session_state.session_restored = False
+
+
+def create_session_token(user_id: int) -> str:
+    """Create a session token for persistent login"""
+    # Create a simple token: user_id + random string + timestamp
+    random_part = secrets.token_urlsafe(16)
+    timestamp = datetime.now().isoformat()
+    token_data = f"{user_id}:{random_part}:{timestamp}"
+    # Hash it for security
+    token = hashlib.sha256(token_data.encode()).hexdigest()
+    
+    # Store in session state
+    st.session_state.session_token = token
+    st.session_state.session_user_id = user_id
+    
+    return token
+
+
+def restore_session_from_storage(user_id: int):
+    """Restore user session from user_id"""
+    try:
+        user_data = get_user_by_id(user_id)
+        if user_data and user_data.get('is_active', True):
+            st.session_state.authenticated = True
+            st.session_state.user_id = user_data['id']
+            st.session_state.username = user_data['username']
+            st.session_state.user_email = user_data['email']
+            st.session_state.current_age = user_data['current_age']
+            st.session_state.target_retirement_age = user_data['target_retirement_age']
+            st.session_state.session_restored = True
+            return True
+    except:
+        pass
+    return False
+
+
+def get_session_persistence_script():
+    """Return JavaScript code for session persistence using localStorage"""
+    return """
+    <script>
+        // Save session to localStorage on login
+        if (window.parent.document.getElementById('save-session-data')) {
+            const sessionData = window.parent.document.getElementById('save-session-data').textContent;
+            if (sessionData && sessionData !== 'null') {
+                localStorage.setItem('finsim_session', sessionData);
+            }
+        }
+        
+        // Load session from localStorage on page load
+        const savedSession = localStorage.getItem('finsim_session');
+        if (savedSession && savedSession !== 'null') {
+            const sessionDisplay = window.parent.document.getElementById('restore-session-data');
+            if (sessionDisplay) {
+                sessionDisplay.textContent = savedSession;
+            }
+        }
+        
+        // Clear session on logout
+        if (window.parent.document.getElementById('clear-session')) {
+            localStorage.removeItem('finsim_session');
+        }
+    </script>
+    """
 
 
 def logout():
@@ -250,6 +321,8 @@ def logout():
     st.session_state.user_email = None
     st.session_state.current_age = None
     st.session_state.target_retirement_age = None
+    st.session_state.session_token = None
+    st.session_state.session_restored = False
 
 
 def show_login_page():
