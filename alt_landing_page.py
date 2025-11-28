@@ -468,11 +468,11 @@ def show_landing_page():
                 # View terms link
                 with st.expander("📄 View Terms of Use & Privacy Policy"):
                     try:
-                        with open('docs/TERMS_AND_PRIVACY.md', 'r') as f:
+                        with open('assets/TERMS_AND_PRIVACY.md', 'r') as f:
                             terms_content = f.read()
                         st.markdown(terms_content)
                     except:
-                        st.info("Terms document available in docs/TERMS_AND_PRIVACY.md")
+                        st.info("Terms document available in assets/TERMS_AND_PRIVACY.md")
                 
                 consent = st.checkbox("✓ I agree to anonymized data sharing for research and product improvement*", key="consent", value=False)
                 terms = st.checkbox("✓ I have read and agree to the Terms of Use and Privacy Policy*", key="terms", value=False)
