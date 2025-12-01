@@ -833,6 +833,7 @@ with tab1:
                                         st.session_state.retirement_age = state['parameters'].get('retirement_age', 65)
                                         st.session_state.simulation_years = state['parameters'].get('simulation_years', 35)
                                         st.session_state.base_events = state['parameters'].get('events', [])
+                                        st.session_state.monthly_mortgage_payment = state['parameters'].get('monthly_mortgage_payment', 0)
                                     
                                     # Set indicator for loaded simulation
                                     st.session_state.loaded_simulation_name = data['name']
@@ -1693,6 +1694,9 @@ with tab1:
         starting_age = st.session_state.get('starting_age', 30)
         retirement_age = st.session_state.get('retirement_age', 65)
         simulation_years = st.session_state.get('simulation_years', 30)
+        
+        # Get number of simulations from results array
+        n_simulations = results['net_worth'].shape[0] if 'net_worth' in results else 1000
         
         display_results = convert_simulation_results_to_display(results, selected_currency)
         base_events = st.session_state.get('base_events', [])
