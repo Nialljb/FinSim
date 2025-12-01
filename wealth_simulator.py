@@ -558,8 +558,15 @@ def run_monte_carlo(initial_liquid_wealth, initial_property_value, initial_mortg
                     monthly_expenses, monthly_mortgage_payment,
                     property_appreciation, mortgage_interest_rate,
                     expected_return, return_volatility, expected_inflation, inflation_volatility,
-                    salary_inflation, years, n_simulations, events, random_seed):
-    """Run Monte Carlo simulation for wealth paths"""
+                    salary_inflation, years, n_simulations, events, random_seed,
+                    starting_age=30, retirement_age=65, pension_income=0):
+    """Run Monte Carlo simulation for wealth paths
+    
+    Args:
+        starting_age: Current age
+        retirement_age: Age when employment income stops
+        pension_income: Annual pension income after retirement (in base currency)
+    """
     np.random.seed(random_seed)
     
     liquid_wealth_paths = np.zeros((n_simulations, years + 1))
@@ -602,19 +609,43 @@ def run_monte_carlo(initial_liquid_wealth, initial_property_value, initial_mortg
         current_monthly_mortgage = monthly_mortgage_tracker[:, year - 1]
         current_monthly_rental = monthly_rental_tracker[:, year - 1]
         
-        year_gross_income = gross_annual_income * cumulative_salary_growth
-        year_pension_contribution = year_gross_income * pension_contribution_rate
-        year_take_home = year_gross_income * (1 - effective_tax_rate - pension_contribution_rate)
+        # Calculate current age for this year
+        current_age = starting_age + year
+        
+        # Determine if in retirement
+        is_retired = current_age > retirement_age
+        
+        if not is_retired:
+            # Pre-retirement: employment income
+            year_gross_income = gross_annual_income * cumulative_salary_growth
+            year_pension_contribution = year_gross_income * pension_contribution_rate
+            year_take_home = year_gross_income * (1 - effective_tax_rate - pension_contribution_rate)
+        else:
+            # Post-retirement: pension income only, no pension contributions
+            year_gross_income = 0
+            year_pension_contribution = 0
+            # Pension income adjusted for inflation from retirement date
+            years_since_retirement = current_age - retirement_age
+            retirement_inflation = np.prod(1 + inflation_rates[:, retirement_age-starting_age:year], axis=1) if years_since_retirement > 0 else 1.0
+            year_take_home = pension_income * retirement_inflation
+        
         year_expenses = current_monthly_expenses * 12 * cumulative_inflation
         year_mortgage_payment = current_monthly_mortgage * 12
         year_rental_income = current_monthly_rental * 12 * cumulative_inflation
         
         year_available_savings = year_take_home + year_rental_income - year_expenses - year_mortgage_payment
         
-        pension_wealth_paths[:, year] = (
-            pension_wealth_paths[:, year - 1] * (1 + pension_returns[:, year - 1]) +
-            year_pension_contribution
-        )
+        # Only contribute to pension pre-retirement
+        if not is_retired:
+            pension_wealth_paths[:, year] = (
+                pension_wealth_paths[:, year - 1] * (1 + pension_returns[:, year - 1]) +
+                year_pension_contribution
+            )
+        else:
+            # In retirement, pension pot still grows but no new contributions
+            pension_wealth_paths[:, year] = (
+                pension_wealth_paths[:, year - 1] * (1 + pension_returns[:, year - 1])
+            )
         
         liquid_wealth_paths[:, year] = (
             liquid_wealth_paths[:, year - 1] * (1 + portfolio_returns[:, year - 1]) +
@@ -714,7 +745,7 @@ if 'active_tab' not in st.session_state:
 
 # Create tabs - note: we can't programmatically select, but we can reorder content
 # Workaround: Use radio buttons styled as tabs or show info message
-tab1, tab2 = st.tabs(["🎲 Simulation", "💰 Budget Builder"])
+tab1, tab2, tab3 = st.tabs(["🎲 Simulation", "💰 Budget Builder", "🎯 Pension Planner"])
 
 # Show message if user just came from budget builder
 if st.session_state.get('just_set_budget', False):
@@ -724,6 +755,13 @@ if st.session_state.get('just_set_budget', False):
 with tab2:
     from budget_builder import show_budget_builder
     show_budget_builder()
+
+with tab3:
+    from pension_ui import show_pension_planner_tab
+    if st.session_state.get('authenticated', False):
+        show_pension_planner_tab(st.session_state.user_id)
+    else:
+        st.warning("Please log in to use the Pension Planner")
 
 with tab1:
     # Initialize session state for budget integration
@@ -969,11 +1007,29 @@ with tab1:
             max_value=100,
             value=default_retirement_age,
             step=1,
-            help="Target retirement age"
+            help="Age when employment income stops and pension begins"
         )
     
-    simulation_years = retirement_age - starting_age
-    st.sidebar.info(f"Simulating **{simulation_years} years** (Age {starting_age} → {retirement_age})")
+    # Get end_age from pension planner or default to retirement + 20
+    end_age = retirement_age + 20
+    if st.session_state.get('authenticated', False):
+        from database import SessionLocal, PensionPlan
+        db = SessionLocal()
+        try:
+            pension_plan = db.query(PensionPlan).filter(
+                PensionPlan.user_id == st.session_state.user_id,
+                PensionPlan.is_active == True
+            ).first()
+            if pension_plan and pension_plan.simulation_end_age:
+                end_age = pension_plan.simulation_end_age
+        finally:
+            db.close()
+    
+    simulation_years = end_age - starting_age
+    years_working = retirement_age - starting_age
+    years_retired = end_age - retirement_age
+    
+    st.sidebar.info(f"**{simulation_years} year simulation**\n- Working: {years_working} yrs (Age {starting_age}-{retirement_age})\n- Retired: {years_retired} yrs (Age {retirement_age}-{end_age})")
     
     if simulation_years <= 0:
         st.sidebar.error("⚠️ Retirement age must be greater than starting age")
@@ -1123,6 +1179,65 @@ with tab1:
         value=10.0,
         step=1.0
     ) / 100
+
+    # Pension Integration
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🎯 Pension Income (After Retirement)")
+    
+    use_pension_data = False
+    total_pension_income = 0
+    
+    if st.session_state.get('authenticated', False):
+        # Load pension data
+        from database import SessionLocal, PensionPlan
+        db = SessionLocal()
+        try:
+            pension_plan = db.query(PensionPlan).filter(
+                PensionPlan.user_id == st.session_state.user_id,
+                PensionPlan.is_active == True
+            ).first()
+            
+            if pension_plan:
+                use_pension_data = st.sidebar.checkbox(
+                    "Use Pension Planner Data",
+                    value=False,
+                    help="Replace employment income with pension income at retirement"
+                )
+                
+                if use_pension_data:
+                    # Calculate total pension income
+                    state_pension = pension_plan.state_pension_annual_amount or 0
+                    uss_pension = pension_plan.uss_projected_annual_pension or 0
+                    uss_avc_value = pension_plan.uss_avc_projected_value or 0
+                    sipp_value = pension_plan.sipp_projected_value or 0
+                    
+                    # Use 4% withdrawal rule for investment pots
+                    uss_avc_income = uss_avc_value * 0.04
+                    sipp_income = sipp_value * 0.04
+                    
+                    total_pension_income = state_pension + uss_pension + uss_avc_income + sipp_income
+                    
+                    # Convert to base currency (EUR)
+                    total_pension_income = to_base_currency(total_pension_income, 'GBP')
+                    
+                    st.sidebar.success(f"✅ Pension Income: {format_currency(from_base_currency(total_pension_income, selected_currency), selected_currency)}/year")
+                    
+                    with st.sidebar.expander("📊 Pension Breakdown"):
+                        st.write(f"**State Pension:** £{state_pension:,.0f}")
+                        st.write(f"**USS Pension:** £{uss_pension:,.0f}")
+                        if uss_avc_income > 0:
+                            st.write(f"**USS AVC (4%):** £{uss_avc_income:,.0f}")
+                        if sipp_income > 0:
+                            st.write(f"**SIPP (4%):** £{sipp_income:,.0f}")
+                        st.write(f"**Total:** £{state_pension + uss_pension + uss_avc_income + sipp_income:,.0f}")
+            else:
+                st.sidebar.info("💡 Set up pension in Pension Planner tab")
+        finally:
+            db.close()
+    else:
+        st.sidebar.info("💡 Log in to integrate pension data")
+    
+    st.sidebar.markdown("---")
 
     # Monthly Budget
     st.sidebar.header("Monthly Budget")
@@ -1628,7 +1743,10 @@ with tab1:
                 years=simulation_years,
                 n_simulations=n_simulations,
                 events=base_events,
-                random_seed=random_seed
+                random_seed=random_seed,
+                starting_age=starting_age,
+                retirement_age=retirement_age,
+                pension_income=total_pension_income if use_pension_data else 0
             )
             
             st.session_state['results'] = results
@@ -1660,7 +1778,10 @@ with tab1:
                 
                 save_simulation(st.session_state.user_id, simulation_params, results)
             
-            st.success(f"✅ Simulation complete! Projected from age {starting_age} to {retirement_age}.")
+            if use_pension_data and years_retired > 0:
+                st.success(f"✅ Simulation complete! Age {starting_age}→{retirement_age} (working) then {retirement_age}→{end_age} (retired with pension income)")
+            else:
+                st.success(f"✅ Simulation complete! Projected from age {starting_age} to {end_age}.")
 
     # Support/Donation Section
     st.sidebar.markdown("---")
@@ -1702,7 +1823,7 @@ with tab1:
         base_events = st.session_state.get('base_events', [])
 
         # Toggle controls
-        col1, col2, col3, col4 = st.columns([2, 2, 2, 2])
+        col1, col2, col3 = st.columns([2, 2, 2])
         with col1:
             show_real = st.checkbox("Show Real (Inflation-Adjusted)", value=True)
         with col2:
@@ -1711,13 +1832,8 @@ with tab1:
                 ["Total Net Worth", "Liquid Wealth", "Property Equity", "Pension Wealth"]
             )
         with col3:
-            show_conversion = st.checkbox("Show EUR Equivalent", value=False, 
-                                         help="Display amounts in EUR for comparison")
-        with col4:
-            if show_conversion and selected_currency != 'EUR':
-                rates = get_exchange_rates()
-                rate = rates.get(f"{selected_currency}_TO_EUR", 1.0)
-                st.caption(f"1 {selected_currency} = {rate:.4f} EUR")
+            show_retirement_period = st.checkbox("Show Retirement Period", value=False,
+                                         help="Highlight retirement years on chart")
         
         # Select paths based on view
         years = simulation_years
@@ -1819,16 +1935,81 @@ with tab1:
                 annotation_position="top"
             )
         
+        # Add retirement marker if enabled and pension data is used
+        if show_retirement_period and use_pension_data and total_pension_income > 0:
+            retirement_year = retirement_age - starting_age
+            fig.add_vrect(
+                x0=retirement_year,
+                x1=years,
+                fillcolor="rgba(255, 215, 0, 0.1)",
+                layer="below",
+                line_width=0,
+                annotation_text="Retirement Period",
+                annotation_position="top left"
+            )
+            fig.add_vline(
+                x=retirement_year,
+                line_dash="solid",
+                line_color="gold",
+                line_width=3,
+                annotation_text=f"Retirement (Age {retirement_age})",
+                annotation_position="top"
+            )
+        
+        # Calculate 90th percentile for y-axis cap
+        percentile_90 = np.percentile(paths_to_plot, 90, axis=0).max()
+        
+        # Determine x-axis range based on retirement period toggle
+        retirement_year = retirement_age - starting_age
+        if show_retirement_period:
+            # Show from retirement onwards
+            x_range = [retirement_year, years]
+            chart_title = f"{y_label} in Retirement: Age {retirement_age} to {end_age}"
+        else:
+            # Show working period + 10 years with retirement marker
+            working_years_plus_10 = min(retirement_year + 10, years)
+            x_range = [0, working_years_plus_10]
+            chart_title = f"{y_label} Trajectory: Age {starting_age} to {starting_age + working_years_plus_10}"
+            
+            # Add retirement bisection line for non-retirement view
+            fig.add_vline(
+                x=retirement_year,
+                line_dash="solid",
+                line_color="gold",
+                line_width=2,
+                annotation_text=f"Retirement (Age {retirement_age})",
+                annotation_position="top"
+            )
+        
+        # Create secondary x-axis showing age alongside years
+        years_list = list(range(int(x_range[0]), int(x_range[1]) + 1))
+        ages_list = [starting_age + y for y in years_list]
+        
+        # Create tick labels with both years and age
+        tick_step = max(1, len(years_list) // 10)  # Show ~10 ticks max
+        tickvals = [y for i, y in enumerate(years_list) if i % tick_step == 0]
+        ticktext = [f"Yr {y}<br>Age {starting_age + y}" for y in tickvals]
+        
         fig.update_layout(
-            title=f"{y_label} Trajectory: Age {starting_age} to {retirement_age} ({simulation_years} years)",
-            xaxis_title="Years from Now",
+            title=chart_title,
+            xaxis_title="Years from Now / Age",
             yaxis_title=f"{y_label} ({currency_symbol})",
             hovermode='x unified',
-            height=600,
+            height=700,
             showlegend=True
         )
         
-        fig.update_yaxes(tickprefix=currency_symbol, tickformat=",.0f")
+        fig.update_xaxes(
+            range=x_range,
+            tickvals=tickvals,
+            ticktext=ticktext
+        )
+        
+        fig.update_yaxes(
+            tickprefix=currency_symbol, 
+            tickformat=",.0f",
+            range=[0, percentile_90 * 1.05]  # Cap at 90th percentile + 5% margin
+        )
         
         st.plotly_chart(fig, use_container_width=True)
         
@@ -1847,14 +2028,10 @@ with tab1:
         with col1:
             median_final = np.median(final_net_worth)
             st.metric("Median Final Net Worth", format_currency(median_final, selected_currency))
-            if show_conversion and selected_currency != 'EUR':
-                st.caption(f"≈ €{convert_currency(median_final, selected_currency, 'EUR'):,.0f}")
         
         with col2:
             mean_final = np.mean(final_net_worth)
             st.metric("Mean Final Net Worth", format_currency(mean_final, selected_currency))
-            if show_conversion and selected_currency != 'EUR':
-                st.caption(f"≈ €{convert_currency(mean_final, selected_currency, 'EUR'):,.0f}")
         
         with col3:
             prob_growth = (final_net_worth > initial_net_worth).mean() * 100
@@ -1923,7 +2100,7 @@ with tab1:
         fig_composition.add_hline(y=0, line_dash="dot", line_color="gray", opacity=0.5)
         
         fig_composition.update_layout(
-            title=f"Wealth Composition: Age {starting_age} to {retirement_age}",
+            title=f"Wealth Composition: Age {starting_age} to {end_age}",
             xaxis_title="Years from Now",
             yaxis_title=f"Value ({currency_symbol})",
             hovermode='x unified',

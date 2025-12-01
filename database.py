@@ -218,6 +218,74 @@ class Feedback(Base):
         return f"<Feedback(id={self.id}, type='{self.feedback_type}', status='{self.status}')>"
 
 
+class PensionPlan(Base):
+    """User pension planning data"""
+    __tablename__ = "pension_plans"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    
+    # Plan metadata
+    name = Column(String(255), default='My Pension Plan')
+    country = Column(String(50), default='UK')  # For future expansion
+    
+    # Personal details
+    date_of_birth = Column(String(10), nullable=True)  # YYYY-MM-DD format
+    employment_start_age = Column(Integer, default=18)
+    target_retirement_age = Column(Integer, default=67)
+    
+    # State Pension (UK)
+    state_pension_enabled = Column(Boolean, default=True)
+    state_pension_ni_years = Column(Integer, default=0)
+    state_pension_projected_years = Column(Integer, default=0)
+    state_pension_annual_amount = Column(Float, default=0)
+    
+    # USS Pension (Universities Superannuation Scheme)
+    uss_enabled = Column(Boolean, default=False)
+    uss_current_salary = Column(Float, default=0)
+    uss_years_in_scheme = Column(Integer, default=0)
+    uss_projected_annual_pension = Column(Float, default=0)
+    uss_projected_lump_sum = Column(Float, default=0)
+    uss_avc_enabled = Column(Boolean, default=False)
+    uss_avc_annual_amount = Column(Float, default=0)
+    uss_avc_percentage = Column(Float, default=0)
+    uss_avc_current_value = Column(Float, default=0)
+    uss_avc_projected_value = Column(Float, default=0)
+    
+    # SIPP (Self-Invested Personal Pension)
+    sipp_enabled = Column(Boolean, default=False)
+    sipp_current_value = Column(Float, default=0)
+    sipp_annual_contribution = Column(Float, default=0)
+    sipp_employer_contribution = Column(Float, default=0)
+    sipp_projected_value = Column(Float, default=0)
+    sipp_growth_rate = Column(Float, default=0.05)  # 5% default
+    
+    # Other pensions (workplace, private, etc.)
+    other_pensions = Column(JSON, nullable=True)  # List of other pension schemes
+    
+    # Retirement income planning
+    desired_retirement_income = Column(Float, default=0)  # Annual amount desired
+    expected_total_pension_income = Column(Float, default=0)  # Calculated total
+    simulation_end_age = Column(Integer, default=0)  # Age to end simulation (for retirement modeling)
+    
+    # Settings and preferences
+    salary_growth_rate = Column(Float, default=0.02)  # 2% default
+    inflation_rate = Column(Float, default=0.02)  # 2% default
+    drawdown_rate = Column(Float, default=0.04)  # 4% safe withdrawal rate
+    
+    # Status
+    is_active = Column(Boolean, default=True)
+    is_default = Column(Boolean, default=False)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    last_calculated = Column(DateTime(timezone=True), nullable=True)
+    
+    def __repr__(self):
+        return f"<PensionPlan(id={self.id}, user_id={self.user_id}, name='{self.name}')>"
+
+
 def init_db():
     """Initialize database - create all tables"""
     Base.metadata.create_all(bind=engine)
