@@ -218,7 +218,7 @@ class SavedBudget(Base):
     current_month = Column(String(7), nullable=True)  # Format: "2025-12" for tracking
     
     # Budget data (JSON) - New structure: {category: amount}
-    budget_expected = Column(JSON, nullable=False)  # Expected monthly budget
+    budget_expected = Column(JSON, nullable=True)  # Expected monthly budget (nullable to match migration)
     
     # Monthly actuals (JSON) - New structure: {"2025-12": {category: amount}, "2026-01": {...}}
     budget_actuals = Column(JSON, nullable=True)  # Actual spending by month
