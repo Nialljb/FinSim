@@ -221,10 +221,10 @@ def show_contact():
     </div>
     """, unsafe_allow_html=True)
 
-        # <a href="#" style="color: #667eea; text-decoration: none; margin: 0 1rem;">Twitter</a> • 
-        # <p style="font-size: 0.9rem; color: #666;">
-        #     <em>(Social links placeholder - update with real profiles)</em>
-        # </p>
+    # <a href="#" style="color: #667eea; text-decoration: none; margin: 0 1rem;">Twitter</a> • 
+    # <p style="font-size: 0.9rem; color: #666;">
+    #     <em>(Social links placeholder - update with real profiles)</em>
+    # </p>
 
     # Footer
     st.markdown("---")

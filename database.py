@@ -248,7 +248,7 @@ class Feedback(Base):
     __tablename__ = "feedback"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=True, index=True)  # Nullable for anonymous submissions
     
     # Feedback details
     feedback_type = Column(String(50), nullable=False)  # 'bug', 'feature', 'general', 'issue'
@@ -730,7 +730,7 @@ def submit_contact_form(name, email, subject, message, user_id=None, include_sys
             formatted_message += f"\n\n--- System Info Included ---"
         
         feedback = Feedback(
-            user_id=user_id if user_id else 1,  # Use 1 for anonymous/guest submissions
+            user_id=user_id,  # None for anonymous submissions
             feedback_type=feedback_type,
             subject=subject,
             message=formatted_message,
