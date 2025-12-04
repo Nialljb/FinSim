@@ -2,7 +2,25 @@
 
 This directory contains database migration scripts for FinSim.
 
-## Quick Fix for Render (Current Issue)
+## Quick Fix for Render - Spouse Fields Error
+
+If you're seeing the error: `column users.has_spouse does not exist`
+
+### Run via Render Shell (Recommended)
+
+1. Go to your Render dashboard
+2. Navigate to your Web Service
+3. Click "Shell" in the left menu
+4. Run:
+   ```bash
+   python fix_render_spouse_fields.py
+   ```
+
+This will add all missing spouse-related columns to the users table.
+
+---
+
+## Quick Fix for Render - Currency Column Error
 
 If you're seeing the error: `column saved_budgets.currency does not exist`
 
