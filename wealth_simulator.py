@@ -2047,7 +2047,7 @@ with tab1:
                 include_spouse=include_spouse,
                 spouse_age=spouse_age,
                 spouse_retirement_age=spouse_retirement_age,
-                spouse_annual_income=spouse_annual_income
+                spouse_annual_income=st.session_state.get('base_spouse_annual_income', 0)
             )
             
             st.session_state['results'] = results
