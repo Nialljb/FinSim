@@ -559,13 +559,14 @@ def run_monte_carlo(initial_liquid_wealth, initial_property_value, initial_mortg
                     property_appreciation, mortgage_interest_rate,
                     expected_return, return_volatility, expected_inflation, inflation_volatility,
                     salary_inflation, years, n_simulations, events, random_seed,
-                    starting_age=30, retirement_age=65, pension_income=0):
+                    starting_age=30, retirement_age=65, pension_income=0, passive_income_streams=None):
     """Run Monte Carlo simulation for wealth paths
     
     Args:
         starting_age: Current age
         retirement_age: Age when employment income stops
         pension_income: Annual pension income after retirement (in base currency)
+        passive_income_streams: List of passive income stream objects
     """
     np.random.seed(random_seed)
     
@@ -577,6 +578,11 @@ def run_monte_carlo(initial_liquid_wealth, initial_property_value, initial_mortg
     monthly_expenses_tracker = np.full((n_simulations, years + 1), monthly_expenses, dtype=float)
     monthly_mortgage_tracker = np.full((n_simulations, years + 1), monthly_mortgage_payment, dtype=float)
     monthly_rental_tracker = np.zeros((n_simulations, years + 1))
+    monthly_passive_income_tracker = np.zeros((n_simulations, years + 1))
+    
+    # Initialize passive income streams
+    if passive_income_streams is None:
+        passive_income_streams = []
     
     liquid_wealth_paths[:, 0] = initial_liquid_wealth
     property_value_paths[:, 0] = initial_property_value
@@ -608,6 +614,28 @@ def run_monte_carlo(initial_liquid_wealth, initial_property_value, initial_mortg
         current_monthly_expenses = monthly_expenses_tracker[:, year - 1]
         current_monthly_mortgage = monthly_mortgage_tracker[:, year - 1]
         current_monthly_rental = monthly_rental_tracker[:, year - 1]
+        current_monthly_passive = monthly_passive_income_tracker[:, year - 1]
+        
+        # Calculate passive income for this year
+        year_passive_income = 0
+        for stream in passive_income_streams:
+            # Check if stream is active this year
+            if stream.start_year <= year and (stream.end_year is None or year <= stream.end_year):
+                # Calculate growth since start
+                years_active = year - stream.start_year
+                growth_factor = (1 + stream.annual_growth_rate) ** years_active
+                stream_annual_amount = stream.monthly_amount * 12 * growth_factor
+                
+                # Apply tax if applicable
+                if stream.is_taxable:
+                    tax_rate = stream.tax_rate if stream.tax_rate is not None else effective_tax_rate
+                    stream_annual_amount *= (1 - tax_rate)
+                
+                year_passive_income += stream_annual_amount
+        
+        # Passive income is the same for all simulation paths (not random)
+        # Adjust for inflation to get real value
+        year_passive_income_adjusted = year_passive_income * cumulative_inflation
         
         # Calculate current age for this year
         current_age = starting_age + year
@@ -633,7 +661,7 @@ def run_monte_carlo(initial_liquid_wealth, initial_property_value, initial_mortg
         year_mortgage_payment = current_monthly_mortgage * 12
         year_rental_income = current_monthly_rental * 12 * cumulative_inflation
         
-        year_available_savings = year_take_home + year_rental_income - year_expenses - year_mortgage_payment
+        year_available_savings = year_take_home + year_rental_income + year_passive_income_adjusted - year_expenses - year_mortgage_payment
         
         # Only contribute to pension pre-retirement
         if not is_retired:
@@ -1238,6 +1266,91 @@ with tab1:
         st.sidebar.info("💡 Log in to integrate pension data")
     
     st.sidebar.markdown("---")
+    
+    # Passive Income Streams
+    st.sidebar.header("💰 Passive Income Streams")
+    
+    if st.session_state.get('authenticated', False):
+        from database import (get_user_passive_income_streams, create_passive_income_stream,
+                            delete_passive_income_stream, PassiveIncomeStream)
+        
+        # Get existing streams
+        passive_streams = get_user_passive_income_streams(st.session_state.user_id)
+        
+        # Display existing streams
+        if passive_streams:
+            total_current_passive = sum(stream.monthly_amount * 12 for stream in passive_streams if stream.start_year == 0)
+            if total_current_passive > 0:
+                display_total = from_base_currency(total_current_passive, selected_currency)
+                st.sidebar.success(f"💵 Current: {format_currency(display_total, selected_currency)}/year")
+            
+            with st.sidebar.expander(f"📋 Manage Streams ({len(passive_streams)})", expanded=False):
+                for stream in passive_streams:
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        display_amount = from_base_currency(stream.monthly_amount, selected_currency)
+                        st.write(f"**{stream.name}**")
+                        st.caption(f"{format_currency(display_amount, selected_currency)}/mo · Starts Yr {stream.start_year}")
+                    with col2:
+                        if st.button("🗑️", key=f"del_stream_{stream.id}"):
+                            success, msg = delete_passive_income_stream(stream.id, st.session_state.user_id)
+                            if success:
+                                st.rerun()
+                    st.markdown("---")
+        
+        # Add new stream
+        with st.sidebar.expander("➕ Add Passive Income Stream", expanded=False):
+            new_name = st.text_input("Name", placeholder="e.g., Rental Property", key="new_passive_name")
+            new_type = st.selectbox("Type", 
+                                   ["rental", "dividend", "royalty", "business", "other"],
+                                   key="new_passive_type")
+            
+            new_monthly = st.number_input(f"Monthly Amount ({currency_symbol})", 
+                                         min_value=0, value=1000, step=100,
+                                         key="new_passive_monthly")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                new_start = st.number_input("Start Year", min_value=0, value=0, 
+                                           help="Years from now (0 = starts immediately)",
+                                           key="new_passive_start")
+            with col2:
+                has_end = st.checkbox("Has end date?", key="new_passive_has_end")
+                new_end = st.number_input("End Year", min_value=1, value=10,
+                                         key="new_passive_end") if has_end else None
+            
+            new_growth = st.slider("Annual Growth (%)", 0.0, 10.0, 2.0, 0.5,
+                                  help="Inflation adjustment",
+                                  key="new_passive_growth") / 100
+            
+            new_taxable = st.checkbox("Taxable", value=True, key="new_passive_taxable")
+            
+            if st.button("Add Stream", key="add_passive_btn", use_container_width=True):
+                if new_name:
+                    # Convert to base currency
+                    base_monthly = to_base_currency(new_monthly, selected_currency)
+                    
+                    success, result = create_passive_income_stream(
+                        user_id=st.session_state.user_id,
+                        name=new_name,
+                        income_type=new_type,
+                        monthly_amount=base_monthly,
+                        start_year=new_start,
+                        end_year=new_end,
+                        annual_growth_rate=new_growth,
+                        is_taxable=new_taxable
+                    )
+                    if success:
+                        st.success("✅ Stream added!")
+                        st.rerun()
+                    else:
+                        st.error(f"Error: {result}")
+                else:
+                    st.warning("Please enter a name")
+    else:
+        st.sidebar.info("💡 Log in to add passive income streams")
+
+    st.sidebar.markdown("---")
 
     # Monthly Budget
     st.sidebar.header("Monthly Budget")
@@ -1723,6 +1836,12 @@ with tab1:
             
             # Combine both event types
             base_events = budget_events + converted_manual_events
+            
+            # Get passive income streams
+            passive_streams = []
+            if st.session_state.get('authenticated', False):
+                from database import get_user_passive_income_streams
+                passive_streams = get_user_passive_income_streams(st.session_state.user_id)
 
             results = run_monte_carlo(
                 initial_liquid_wealth=sim_liquid_wealth,
@@ -1746,7 +1865,8 @@ with tab1:
                 random_seed=random_seed,
                 starting_age=starting_age,
                 retirement_age=retirement_age,
-                pension_income=total_pension_income if use_pension_data else 0
+                pension_income=total_pension_income if use_pension_data else 0,
+                passive_income_streams=passive_streams
             )
             
             st.session_state['results'] = results
@@ -2216,22 +2336,53 @@ with tab1:
             year1_pension = year1_income * pension_contribution_rate
             year1_tax = year1_income * effective_tax_rate
             year1_takehome = year1_income - year1_pension - year1_tax
+            
+            # Calculate passive income for Year 1
+            year1_passive_income = 0
+            if st.session_state.get('authenticated', False):
+                from database import get_user_passive_income_streams
+                passive_streams = get_user_passive_income_streams(st.session_state.user_id)
+                
+                for stream in passive_streams:
+                    if stream.start_year <= 1 and (stream.end_year is None or 1 <= stream.end_year):
+                        years_active = 1 - stream.start_year
+                        growth_factor = (1 + stream.annual_growth_rate) ** years_active
+                        stream_annual_amount = from_base_currency(stream.monthly_amount * 12 * growth_factor, selected_currency)
+                        
+                        if stream.is_taxable:
+                            tax_rate = stream.tax_rate if stream.tax_rate is not None else effective_tax_rate
+                            stream_annual_amount *= (1 - tax_rate)
+                        
+                        year1_passive_income += stream_annual_amount
+            
             year1_expenses = monthly_expenses * 12
             year1_mortgage = st.session_state.get('monthly_mortgage_payment', 0) * 12
-            year1_available = year1_takehome - year1_expenses - year1_mortgage
+            year1_available = year1_takehome + year1_passive_income - year1_expenses - year1_mortgage
+            
+            cashflow_items = [
+                'Gross Income', '- Pension Contrib', '- Tax', '= Take Home'
+            ]
+            cashflow_amounts = [
+                format_currency(year1_income, selected_currency),
+                format_currency(year1_pension, selected_currency),
+                format_currency(year1_tax, selected_currency),
+                format_currency(year1_takehome, selected_currency)
+            ]
+            
+            if year1_passive_income > 0:
+                cashflow_items.append('+ Passive Income')
+                cashflow_amounts.append(format_currency(year1_passive_income, selected_currency))
+            
+            cashflow_items.extend(['- Living Expenses', '- Mortgage', '= Available for Investment'])
+            cashflow_amounts.extend([
+                format_currency(year1_expenses, selected_currency),
+                format_currency(year1_mortgage, selected_currency),
+                format_currency(year1_available, selected_currency)
+            ])
             
             cashflow_df = pd.DataFrame({
-                'Item': ['Gross Income', '- Pension Contrib', '- Tax', '= Take Home', 
-                        '- Living Expenses', '- Mortgage', '= Available for Investment'],
-                'Amount': [
-                    format_currency(year1_income, selected_currency),
-                    format_currency(year1_pension, selected_currency),
-                    format_currency(year1_tax, selected_currency),
-                    format_currency(year1_takehome, selected_currency),
-                    format_currency(year1_expenses, selected_currency),
-                    format_currency(year1_mortgage, selected_currency),
-                    format_currency(year1_available, selected_currency)
-                ]
+                'Item': cashflow_items,
+                'Amount': cashflow_amounts
             })
             st.dataframe(cashflow_df, use_container_width=True, hide_index=True)
             
@@ -2311,7 +2462,26 @@ with tab1:
             year_monthly_expenses = monthly_expenses
             year_monthly_mortgage = calculated_payment
             year_monthly_rental = 0
+            year_passive_income_annual = 0
             event_notes = []
+            
+            # Calculate passive income for this year
+            if st.session_state.get('authenticated', False):
+                from database import get_user_passive_income_streams
+                passive_streams = get_user_passive_income_streams(st.session_state.user_id)
+                
+                for stream in passive_streams:
+                    if stream.start_year <= year and (stream.end_year is None or year <= stream.end_year):
+                        years_active = year - stream.start_year
+                        growth_factor = (1 + stream.annual_growth_rate) ** years_active
+                        stream_annual_amount = from_base_currency(stream.monthly_amount * 12 * growth_factor, selected_currency)
+                        
+                        # Apply tax if applicable
+                        if stream.is_taxable:
+                            tax_rate = stream.tax_rate if stream.tax_rate is not None else effective_tax_rate
+                            stream_annual_amount *= (1 - tax_rate)
+                        
+                        year_passive_income_annual += stream_annual_amount
             
             # Convert events from base to display currency for this calculation
             display_events = convert_events_from_base(base_events, selected_currency)
@@ -2348,13 +2518,14 @@ with tab1:
             year_rental_annual = year_monthly_rental * 12
             year_expenses_annual = year_monthly_expenses * 12
             year_mortgage_annual = year_monthly_mortgage * 12
-            year_available = year_takehome + year_rental_annual - year_expenses_annual - year_mortgage_annual
+            year_available = year_takehome + year_rental_annual + year_passive_income_annual - year_expenses_annual - year_mortgage_annual
             
             cashflow_projection.append({
                 'Year': year,
                 'Age': starting_age + year,
                 'Take Home': format_currency(year_takehome, selected_currency),
                 'Rental Income': format_currency(year_rental_annual, selected_currency) if year_rental_annual > 0 else "-",
+                'Passive Income': format_currency(year_passive_income_annual, selected_currency) if year_passive_income_annual > 0 else "-",
                 'Living Expenses': format_currency(year_expenses_annual, selected_currency),
                 'Mortgage': format_currency(year_mortgage_annual, selected_currency) if year_mortgage_annual > 0 else "-",
                 'Available Savings': format_currency(year_available, selected_currency),
