@@ -26,6 +26,7 @@ from pension_planner import (
     project_avc_growth,
     USS_RETIREMENT_AGE,
     USS_ACCRUAL_RATE,
+    USS_LUMP_SUM_MULTIPLE,
     
     # SIPP
     calculate_sipp_tax_relief,
@@ -429,6 +430,162 @@ def show_state_pension_calculator(pension_data, user_id):
         save_pension_plan(pension_data, user_id)
         st.success("✅ State Pension data saved!")
         st.rerun()
+    
+    # ========================================================================
+    # SPOUSE STATE PENSION
+    # ========================================================================
+    st.markdown("---")
+    st.markdown("---")
+    st.subheader("👥 Spouse/Partner State Pension")
+    
+    include_spouse = st.checkbox(
+        "Include Spouse/Partner State Pension",
+        value=pension_data.get('spouse_state_pension_enabled', False),
+        help="Add your spouse's State Pension to household retirement planning"
+    )
+    
+    if include_spouse:
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            # Spouse date of birth
+            spouse_dob_str = pension_data.get('spouse_date_of_birth')
+            if spouse_dob_str:
+                spouse_dob = datetime.strptime(spouse_dob_str, '%Y-%m-%d').date()
+            else:
+                spouse_dob = date(1980, 1, 1)
+            
+            spouse_date_of_birth = st.date_input(
+                "Spouse Date of Birth",
+                value=spouse_dob,
+                min_value=date(1940, 1, 1),
+                max_value=date.today(),
+                key="spouse_dob",
+                help="Your spouse's date of birth"
+            )
+            
+            # Calculate spouse State Pension age
+            spouse_pension_age = calculate_state_pension_age(spouse_date_of_birth)
+            spouse_current_age = (date.today() - spouse_date_of_birth).days // 365
+            spouse_years_to_pension = max(0, spouse_pension_age - spouse_current_age)
+            
+            st.info(f"📅 Spouse's State Pension age is **{spouse_pension_age}** (in {spouse_years_to_pension} years)")
+            
+            # Spouse NI years
+            col_a, col_b = st.columns(2)
+            
+            with col_a:
+                spouse_ni_years = st.number_input(
+                    "Spouse Current NI Years",
+                    min_value=0,
+                    max_value=50,
+                    value=pension_data.get('spouse_state_pension_ni_years', 0),
+                    key="spouse_ni_years",
+                    help="Spouse's NI qualifying years"
+                )
+            
+            with col_b:
+                spouse_employment_status = st.selectbox(
+                    "Spouse Employment Status",
+                    ["Employed", "Self-Employed", "Unemployed (claiming credits)", "Not working"],
+                    key="spouse_employment",
+                    help="This affects future NI contributions"
+                )
+            
+            # Project spouse future years
+            if spouse_employment_status in ["Employed", "Self-Employed"]:
+                spouse_projected_future_years = spouse_years_to_pension
+            elif spouse_employment_status == "Unemployed (claiming credits)":
+                spouse_projected_future_years = int(spouse_years_to_pension * 0.8)
+            else:
+                spouse_projected_future_years = st.number_input(
+                    "Spouse Expected Future Qualifying Years",
+                    min_value=0,
+                    max_value=spouse_years_to_pension,
+                    value=0,
+                    key="spouse_projected_years",
+                    help="Years spouse expects to contribute NI"
+                )
+            
+            # Calculate spouse forecast
+            spouse_forecast = forecast_state_pension(spouse_date_of_birth, spouse_ni_years, spouse_projected_future_years)
+        
+        with col2:
+            st.markdown("### Spouse's State Pension")
+            
+            if spouse_ni_years > 0:
+                tab_current, tab_projected = st.tabs(["📊 Current", "🎯 At Retirement"])
+                
+                with tab_current:
+                    spouse_current_amount = calculate_state_pension_amount(spouse_ni_years)
+                    spouse_current_monthly = spouse_current_amount / 12
+                    
+                    st.metric("NI Years Accrued", f"{spouse_ni_years} years")
+                    st.metric("Current Annual", f"£{spouse_current_amount:,.2f}")
+                    st.metric("Current Monthly", f"£{spouse_current_monthly:,.2f}")
+                    
+                    spouse_current_progress = min(spouse_ni_years / QUALIFYING_YEARS_FULL, 1.0)
+                    st.progress(spouse_current_progress)
+                    st.caption(f"{spouse_current_progress*100:.0f}% of full pension")
+                
+                with tab_projected:
+                    st.metric(
+                        "Projected Total Years",
+                        f"{spouse_forecast['qualifying_years']} years",
+                        delta=f"+{spouse_projected_future_years} years"
+                    )
+                    st.metric("Projected Annual", f"£{spouse_forecast['annual_amount']:,.2f}")
+                    st.metric("Projected Monthly", f"£{spouse_forecast['monthly_amount']:,.2f}")
+                    
+                    spouse_progress = min(spouse_forecast['qualifying_years'] / QUALIFYING_YEARS_FULL, 1.0)
+                    st.progress(spouse_progress)
+                    
+                    if spouse_forecast['is_full_pension']:
+                        st.success("✅ Full State Pension")
+                    elif spouse_forecast['qualifying_years'] >= QUALIFYING_YEARS_MIN:
+                        spouse_missing = QUALIFYING_YEARS_FULL - spouse_forecast['qualifying_years']
+                        st.warning(f"⚠️ {spouse_missing} more years for full")
+                    else:
+                        spouse_need = QUALIFYING_YEARS_MIN - spouse_forecast['qualifying_years']
+                        st.error(f"❌ Need {spouse_need} more years to qualify")
+            else:
+                st.metric("Total Qualifying Years", f"{spouse_forecast['qualifying_years']}")
+                st.metric("Annual Pension", f"£{spouse_forecast['annual_amount']:,.2f}")
+                st.metric("Monthly Pension", f"£{spouse_forecast['monthly_amount']:,.2f}")
+                
+                spouse_progress = min(spouse_forecast['qualifying_years'] / QUALIFYING_YEARS_FULL, 1.0)
+                st.progress(spouse_progress)
+        
+        # Household total
+        st.markdown("---")
+        st.markdown("### 🏠 Household State Pension Total")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            primary_annual = forecast['annual_amount']
+            st.metric("Your Annual Pension", f"£{primary_annual:,.2f}")
+        with col2:
+            spouse_annual = spouse_forecast['annual_amount']
+            st.metric("Spouse Annual Pension", f"£{spouse_annual:,.2f}")
+        with col3:
+            household_total = primary_annual + spouse_annual
+            st.metric("Household Total", f"£{household_total:,.2f}", 
+                     help="Combined annual State Pension income")
+        
+        # Save spouse data
+        if st.button("💾 Save Spouse State Pension Data", type="primary", key="save_spouse_sp"):
+            pension_data.update({
+                'spouse_state_pension_enabled': True,
+                'spouse_date_of_birth': spouse_date_of_birth.strftime('%Y-%m-%d'),
+                'spouse_state_pension_ni_years': spouse_ni_years,
+                'spouse_state_pension_projected_years': spouse_projected_future_years,
+                'spouse_state_pension_annual_amount': spouse_forecast['annual_amount'],
+                'spouse_retirement_age': spouse_pension_age,
+                'spouse_age': spouse_current_age
+            })
+            save_pension_plan(pension_data, user_id)
+            st.success("✅ Spouse State Pension data saved!")
+            st.rerun()
 
 
 def show_uss_pension_calculator(pension_data, user_id):
@@ -752,6 +909,89 @@ def show_uss_pension_calculator(pension_data, user_id):
         save_pension_plan(pension_data, user_id)
         st.success("✅ USS data saved!")
         st.rerun()
+    
+    # ========================================================================
+    # SPOUSE USS PENSION
+    # ========================================================================
+    st.markdown("---")
+    st.markdown("---")
+    st.subheader("👥 Spouse/Partner USS Pension")
+    
+    spouse_use_uss = st.checkbox(
+        "Spouse is a member of USS",
+        value=pension_data.get('spouse_uss_enabled', False),
+        key="spouse_uss_enabled"
+    )
+    
+    if spouse_use_uss:
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            spouse_salary = st.number_input(
+                "Spouse Annual Salary (£)",
+                min_value=0,
+                value=int(pension_data.get('spouse_uss_current_salary', 50000)),
+                step=1000,
+                key="spouse_uss_salary"
+            )
+            
+            spouse_uss_years = st.number_input(
+                "Spouse Years in USS",
+                min_value=0.0,
+                max_value=50.0,
+                value=float(pension_data.get('spouse_uss_years_in_scheme', 0)),
+                step=0.5,
+                key="spouse_uss_years"
+            )
+            
+            spouse_uss_avc = st.checkbox(
+                "Spouse makes AVCs",
+                value=pension_data.get('spouse_uss_avc_enabled', False),
+                key="spouse_uss_avc"
+            )
+            
+            spouse_avc_amount = 0
+            if spouse_uss_avc:
+                spouse_avc_pct = st.slider(
+                    "Spouse AVC %",
+                    0.0, 20.0,
+                    float(pension_data.get('spouse_uss_avc_percentage', 0)),
+                    0.5,
+                    key="spouse_avc_pct"
+                )
+                spouse_avc_amount = spouse_salary * (spouse_avc_pct / 100)
+                spouse_avc_current = st.number_input(
+                    "Current AVC Value (£)",
+                    0,
+                    value=int(pension_data.get('spouse_uss_avc_current_value', 0)),
+                    step=1000,
+                    key="spouse_avc_current"
+                )
+        
+        with col2:
+            # Simple projection
+            spouse_annual_pension = spouse_uss_years * spouse_salary * USS_ACCRUAL_RATE
+            spouse_lump_sum = spouse_annual_pension * USS_LUMP_SUM_MULTIPLE
+            
+            st.metric("Current USS Pension", f"£{spouse_annual_pension:,.0f}/year")
+            st.metric("Available Lump Sum", f"£{spouse_lump_sum:,.0f}")
+            if spouse_uss_avc:
+                st.metric("AVC Annual Contribution", f"£{spouse_avc_amount:,.0f}")
+        
+        if st.button("💾 Save Spouse USS Data", type="primary", key="save_spouse_uss"):
+            pension_data.update({
+                'spouse_uss_enabled': True,
+                'spouse_uss_current_salary': spouse_salary,
+                'spouse_uss_years_in_scheme': spouse_uss_years,
+                'spouse_uss_projected_annual_pension': spouse_annual_pension,
+                'spouse_uss_projected_lump_sum': spouse_lump_sum,
+                'spouse_uss_avc_enabled': spouse_uss_avc,
+                'spouse_uss_avc_annual_amount': spouse_avc_amount if spouse_uss_avc else 0,
+                'spouse_uss_avc_current_value': spouse_avc_current if spouse_uss_avc else 0
+            })
+            save_pension_plan(pension_data, user_id)
+            st.success("✅ Spouse USS data saved!")
+            st.rerun()
 
 
 def show_sipp_calculator(pension_data, user_id):
@@ -920,6 +1160,72 @@ def show_sipp_calculator(pension_data, user_id):
         save_pension_plan(pension_data, user_id)
         st.success("✅ SIPP data saved!")
         st.rerun()
+    
+    # ========================================================================
+    # SPOUSE SIPP
+    # ========================================================================
+    st.markdown("---")
+    st.markdown("---")
+    st.subheader("👥 Spouse/Partner SIPP")
+    
+    spouse_use_sipp = st.checkbox(
+        "Spouse has a SIPP",
+        value=pension_data.get('spouse_sipp_enabled', False),
+        key="spouse_sipp_enabled"
+    )
+    
+    if spouse_use_sipp:
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            spouse_sipp_current = st.number_input(
+                "Spouse Current SIPP Value (£)",
+                min_value=0,
+                value=int(pension_data.get('spouse_sipp_current_value', 0)),
+                step=1000,
+                key="spouse_sipp_current"
+            )
+            
+            spouse_sipp_contribution = st.number_input(
+                "Spouse Annual Contribution (£)",
+                min_value=0,
+                value=int(pension_data.get('spouse_sipp_annual_contribution', 0)),
+                step=500,
+                key="spouse_sipp_contribution"
+            )
+            
+            spouse_sipp_growth = st.slider(
+                "Spouse Expected Growth Rate (%)",
+                0.0, 15.0,
+                float(pension_data.get('spouse_sipp_growth_rate', 5.0)),
+                0.5,
+                key="spouse_sipp_growth"
+            )
+        
+        with col2:
+            # Simple projection
+            years_to_retirement = max(1, pension_data.get('spouse_retirement_age', 67) - pension_data.get('spouse_age', 30))
+            spouse_sipp_projected = project_sipp_growth(
+                spouse_sipp_contribution,
+                years_to_retirement,
+                spouse_sipp_growth / 100,
+                spouse_sipp_current
+            )
+            
+            st.metric("Projected at Retirement", f"£{spouse_sipp_projected['final_value']:,.0f}")
+            st.metric("Tax-Free Lump Sum", f"£{spouse_sipp_projected['tax_free_lump_sum']:,.0f}")
+        
+        if st.button("💾 Save Spouse SIPP Data", type="primary", key="save_spouse_sipp"):
+            pension_data.update({
+                'spouse_sipp_enabled': True,
+                'spouse_sipp_current_value': spouse_sipp_current,
+                'spouse_sipp_annual_contribution': spouse_sipp_contribution,
+                'spouse_sipp_projected_value': spouse_sipp_projected['final_value'],
+                'spouse_sipp_growth_rate': spouse_sipp_growth / 100
+            })
+            save_pension_plan(pension_data, user_id)
+            st.success("✅ Spouse SIPP data saved!")
+            st.rerun()
 
 
 def show_retirement_income_planner(pension_data, user_id):

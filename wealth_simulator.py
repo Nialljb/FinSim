@@ -15,7 +15,7 @@ import plotly.io as pio
 from auth import initialize_session_state, show_login_page, show_user_header, check_simulation_limit, increment_simulation_count, increment_export_count, reset_simulation_count
 from data_tracking import save_simulation, save_full_simulation, load_simulation, get_user_simulations, delete_simulation, update_simulation_name
 from database import init_db
-from alt_landing_page import show_landing_page
+from landing_page import show_landing_page
 from currency_converter import get_exchange_rates, convert_currency, show_currency_info
 
 # ADD THESE LINES after the existing currency_converter import:
@@ -43,7 +43,7 @@ initialize_currency_system()
 # Set page config - ONCE at the top
 st.set_page_config(
     page_title="FinSim - Financial Planning",
-    page_icon="💰",
+    page_icon="🐬",
     layout="wide",
 )
 
@@ -109,7 +109,8 @@ CURRENCIES = {
 # Helper function for Excel export
 def export_to_excel(results, currency_symbol, selected_currency, events, 
                     gross_annual_income, monthly_expenses, initial_liquid_wealth,
-                    initial_property_value, initial_mortgage):
+                    initial_property_value, initial_mortgage, include_spouse=False, spouse_age=None,
+                    spouse_retirement_age=None, spouse_annual_income=0):
     """Export simulation results to Excel file"""
     output = io.BytesIO()
     
@@ -153,37 +154,63 @@ def export_to_excel(results, currency_symbol, selected_currency, events,
         currency_info.to_excel(writer, sheet_name='Currency Info', index=False)
         
         # Summary Statistics
+        summary_metrics = [
+            'Median Final Net Worth',
+            'Mean Final Net Worth',
+            '10th Percentile Final Net Worth',
+            '90th Percentile Final Net Worth',
+            'Probability of Growth',
+            'Probability of 2x Growth',
+            '',
+            'Initial Inputs',
+            'Gross Annual Income',
+            'Monthly Expenses',
+            'Initial Liquid Wealth',
+            'Initial Property Value',
+            'Initial Mortgage'
+        ]
+        
+        summary_values = [
+            np.median(export_results['net_worth'][:, -1]),
+            np.mean(export_results['net_worth'][:, -1]),
+            np.percentile(export_results['net_worth'][:, -1], 10),
+            np.percentile(export_results['net_worth'][:, -1], 90),
+            (export_results['net_worth'][:, -1] > export_results['net_worth'][:, 0]).mean(),
+            (export_results['net_worth'][:, -1] > export_results['net_worth'][:, 0] * 2).mean(),
+            '',
+            '',
+            export_income,
+            export_expenses,
+            export_liquid,
+            export_property,
+            export_mortgage
+        ]
+        
+        # Add spouse information if included
+        if include_spouse and spouse_annual_income > 0:
+            export_spouse_income = from_base_currency(spouse_annual_income, selected_currency)
+            summary_metrics.extend([
+                '',
+                'Spouse/Partner',
+                'Spouse Annual Income',
+                'Spouse Age',
+                'Spouse Retirement Age',
+                '',
+                'Household Total Income'
+            ])
+            summary_values.extend([
+                '',
+                '',
+                export_spouse_income,
+                spouse_age if spouse_age else 'N/A',
+                spouse_retirement_age if spouse_retirement_age else 'N/A',
+                '',
+                export_income + export_spouse_income
+            ])
+        
         summary_data = {
-            'Metric': [
-                'Median Final Net Worth',
-                'Mean Final Net Worth',
-                '10th Percentile Final Net Worth',
-                '90th Percentile Final Net Worth',
-                'Probability of Growth',
-                'Probability of 2x Growth',
-                '',
-                'Initial Inputs',
-                'Gross Annual Income',
-                'Monthly Expenses',
-                'Initial Liquid Wealth',
-                'Initial Property Value',
-                'Initial Mortgage'
-            ],
-            'Value': [
-                np.median(export_results['net_worth'][:, -1]),
-                np.mean(export_results['net_worth'][:, -1]),
-                np.percentile(export_results['net_worth'][:, -1], 10),
-                np.percentile(export_results['net_worth'][:, -1], 90),
-                (export_results['net_worth'][:, -1] > export_results['net_worth'][:, 0]).mean(),
-                (export_results['net_worth'][:, -1] > export_results['net_worth'][:, 0] * 2).mean(),
-                '',
-                '',
-                export_income,
-                export_expenses,
-                export_liquid,
-                export_property,
-                export_mortgage
-            ]
+            'Metric': summary_metrics,
+            'Value': summary_values
         }
         summary_df = pd.DataFrame(summary_data)
         summary_df.to_excel(writer, sheet_name='Summary', index=False)
@@ -255,7 +282,8 @@ def export_to_excel(results, currency_symbol, selected_currency, events,
 
 def export_to_pdf(results, currency_symbol, selected_currency, events, fig_main, fig_composition,
                   gross_annual_income, monthly_expenses, initial_liquid_wealth,
-                  initial_property_value, initial_mortgage):
+                  initial_property_value, initial_mortgage, include_spouse=False, spouse_age=None,
+                  spouse_retirement_age=None, spouse_annual_income=0):
     """Export simulation results to PDF file"""
     output = io.BytesIO()
     
@@ -380,13 +408,21 @@ def export_to_pdf(results, currency_symbol, selected_currency, events, fig_main,
 
 def export_to_pdf(results, currency_symbol, selected_currency, events, fig_main, fig_composition,
                   gross_annual_income, monthly_expenses, initial_liquid_wealth,
-                  initial_property_value, initial_mortgage):
+                  initial_property_value, initial_mortgage, include_spouse=False, spouse_age=None,
+                  spouse_retirement_age=None, spouse_annual_income=0):
     """Export simulation results to PDF file"""
     output = io.BytesIO()
     
     doc = SimpleDocTemplate(output, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch)
     story = []
     styles = getSampleStyleSheet()
+    
+    # Convert base currency values to display currency
+    export_income = from_base_currency(gross_annual_income, selected_currency)
+    export_expenses = from_base_currency(monthly_expenses, selected_currency)
+    export_liquid = from_base_currency(initial_liquid_wealth, selected_currency)
+    export_property = from_base_currency(initial_property_value, selected_currency)
+    export_mortgage = from_base_currency(initial_mortgage, selected_currency)
     
     title_style = ParagraphStyle(
         'CustomTitle',
@@ -446,14 +482,27 @@ def export_to_pdf(results, currency_symbol, selected_currency, events, fig_main,
     
     initial_data = [
         ['Component', 'Amount'],
-        ['Liquid Wealth', format_currency(initial_liquid_wealth, selected_currency)],
-        ['Property Value', format_currency(initial_property_value, selected_currency)],
-        ['Mortgage Debt', format_currency(-initial_mortgage, selected_currency)],
-        ['Net Worth', format_currency(initial_liquid_wealth + initial_property_value - initial_mortgage, selected_currency)],
+        ['Liquid Wealth', format_currency(export_liquid, selected_currency)],
+        ['Property Value', format_currency(export_property, selected_currency)],
+        ['Mortgage Debt', format_currency(-export_mortgage, selected_currency)],
+        ['Net Worth', format_currency(export_liquid + export_property - export_mortgage, selected_currency)],
         ['', ''],
-        ['Gross Annual Income', format_currency(gross_annual_income, selected_currency)],
-        ['Monthly Expenses', format_currency(monthly_expenses, selected_currency)],
+        ['Gross Annual Income', format_currency(export_income, selected_currency)],
+        ['Monthly Expenses', format_currency(export_expenses, selected_currency)],
     ]
+    
+    # Add spouse information if included
+    if include_spouse and spouse_annual_income > 0:
+        export_spouse_income = from_base_currency(spouse_annual_income, selected_currency)
+        initial_data.extend([
+            ['', ''],
+            ['Spouse/Partner', ''],
+            ['Spouse Annual Income', format_currency(export_spouse_income, selected_currency)],
+            ['Spouse Age', str(spouse_age) if spouse_age else 'N/A'],
+            ['Spouse Retirement Age', str(spouse_retirement_age) if spouse_retirement_age else 'N/A'],
+            ['', ''],
+            ['Household Total Income', format_currency(export_income + export_spouse_income, selected_currency)],
+        ])
     
     initial_table = Table(initial_data, colWidths=[3.5*inch, 2*inch])
     initial_table.setStyle(TableStyle([
@@ -559,7 +608,8 @@ def run_monte_carlo(initial_liquid_wealth, initial_property_value, initial_mortg
                     property_appreciation, mortgage_interest_rate,
                     expected_return, return_volatility, expected_inflation, inflation_volatility,
                     salary_inflation, years, n_simulations, events, random_seed,
-                    starting_age=30, retirement_age=65, pension_income=0, passive_income_streams=None):
+                    starting_age=30, retirement_age=65, pension_income=0, passive_income_streams=None,
+                    include_spouse=False, spouse_age=None, spouse_retirement_age=None, spouse_annual_income=0):
     """Run Monte Carlo simulation for wealth paths
     
     Args:
@@ -567,6 +617,10 @@ def run_monte_carlo(initial_liquid_wealth, initial_property_value, initial_mortg
         retirement_age: Age when employment income stops
         pension_income: Annual pension income after retirement (in base currency)
         passive_income_streams: List of passive income stream objects
+        include_spouse: Whether to include spouse in simulation
+        spouse_age: Current age of spouse
+        spouse_retirement_age: Retirement age of spouse
+        spouse_annual_income: Spouse's annual gross income
     """
     np.random.seed(random_seed)
     
@@ -643,19 +697,45 @@ def run_monte_carlo(initial_liquid_wealth, initial_property_value, initial_mortg
         # Determine if in retirement
         is_retired = current_age > retirement_age
         
+        # Calculate spouse current age and retirement status (if applicable)
+        spouse_is_retired = False
+        if include_spouse and spouse_age is not None and spouse_retirement_age is not None:
+            spouse_current_age = spouse_age + year
+            spouse_is_retired = spouse_current_age > spouse_retirement_age
+        
+        # Calculate household income
+        year_gross_income = 0
+        year_pension_contribution = 0
+        year_take_home = 0
+        
+        # Primary income
         if not is_retired:
             # Pre-retirement: employment income
-            year_gross_income = gross_annual_income * cumulative_salary_growth
-            year_pension_contribution = year_gross_income * pension_contribution_rate
-            year_take_home = year_gross_income * (1 - effective_tax_rate - pension_contribution_rate)
+            primary_gross = gross_annual_income * cumulative_salary_growth
+            primary_pension_contrib = primary_gross * pension_contribution_rate
+            primary_take_home = primary_gross * (1 - effective_tax_rate - pension_contribution_rate)
+            
+            year_gross_income += primary_gross
+            year_pension_contribution += primary_pension_contrib
+            year_take_home += primary_take_home
         else:
-            # Post-retirement: pension income only, no pension contributions
-            year_gross_income = 0
-            year_pension_contribution = 0
-            # Pension income adjusted for inflation from retirement date
+            # Post-retirement: pension income only
             years_since_retirement = current_age - retirement_age
             retirement_inflation = np.prod(1 + inflation_rates[:, retirement_age-starting_age:year], axis=1) if years_since_retirement > 0 else 1.0
-            year_take_home = pension_income * retirement_inflation
+            year_take_home += pension_income * retirement_inflation
+        
+        # Spouse income (if enabled)
+        if include_spouse and spouse_annual_income > 0:
+            if not spouse_is_retired:
+                # Spouse working: employment income
+                spouse_gross = spouse_annual_income * cumulative_salary_growth
+                spouse_pension_contrib = spouse_gross * pension_contribution_rate
+                spouse_take_home = spouse_gross * (1 - effective_tax_rate - pension_contribution_rate)
+                
+                year_gross_income += spouse_gross
+                year_pension_contribution += spouse_pension_contrib
+                year_take_home += spouse_take_home
+            # Note: spouse pension income will be handled separately via pension planner integration
         
         year_expenses = current_monthly_expenses * 12 * cumulative_inflation
         year_mortgage_payment = current_monthly_mortgage * 12
@@ -1092,8 +1172,72 @@ with tab1:
 
     # Show currency info
     create_currency_info_widget()
-
-
+    
+    st.sidebar.markdown("---")
+    
+    # Spouse/Partner Integration
+    st.sidebar.header("👥 Spouse/Partner")
+    
+    include_spouse = st.sidebar.checkbox(
+        "Include Spouse/Partner",
+        value=st.session_state.get('has_spouse', False),
+        help="Enable household-level planning with dual retirement ages"
+    )
+    
+    spouse_age = None
+    spouse_retirement_age = None
+    spouse_annual_income = 0
+    
+    if include_spouse:
+        spouse_col1, spouse_col2 = st.sidebar.columns(2)
+        
+        with spouse_col1:
+            spouse_age = st.number_input(
+                "Spouse Age",
+                min_value=18,
+                max_value=100,
+                value=st.session_state.get('spouse_age', starting_age),
+                step=1,
+                help="Current age of spouse/partner"
+            )
+        
+        with spouse_col2:
+            spouse_retirement_age = st.number_input(
+                "Spouse Retirement Age",
+                min_value=spouse_age + 1 if spouse_age else 50,
+                max_value=100,
+                value=st.session_state.get('spouse_retirement_age', retirement_age),
+                step=1,
+                help="Age when spouse retires"
+            )
+        
+        spouse_annual_income = st.sidebar.number_input(
+            f"Spouse Annual Income ({currency_symbol})",
+            min_value=0,
+            max_value=10000000,
+            value=int(st.session_state.get('spouse_annual_income', 0)),
+            step=1000,
+            key=f"spouse_income_{selected_currency}",
+            help="Spouse's current gross annual income"
+        )
+        
+        # Store spouse data in session state
+        st.session_state.has_spouse = True
+        st.session_state.spouse_age = spouse_age
+        st.session_state.spouse_retirement_age = spouse_retirement_age
+        st.session_state.spouse_annual_income = spouse_annual_income
+        st.session_state.base_spouse_annual_income = to_base_currency(
+            spouse_annual_income,
+            selected_currency
+        )
+        
+        # Show spouse info
+        spouse_years_working = spouse_retirement_age - spouse_age
+        st.sidebar.info(f"**Spouse working:** {spouse_years_working} years (Age {spouse_age}-{spouse_retirement_age})")
+    else:
+        st.session_state.has_spouse = False
+    
+    st.sidebar.markdown("---")
 
     # Initial Position
     st.sidebar.header("Initial Position")
@@ -1233,7 +1377,7 @@ with tab1:
                 )
                 
                 if use_pension_data:
-                    # Calculate total pension income
+                    # Calculate total pension income (primary)
                     state_pension = pension_plan.state_pension_annual_amount or 0
                     uss_pension = pension_plan.uss_projected_annual_pension or 0
                     uss_avc_value = pension_plan.uss_avc_projected_value or 0
@@ -1243,20 +1387,53 @@ with tab1:
                     uss_avc_income = uss_avc_value * 0.04
                     sipp_income = sipp_value * 0.04
                     
-                    total_pension_income = state_pension + uss_pension + uss_avc_income + sipp_income
+                    primary_pension_income = state_pension + uss_pension + uss_avc_income + sipp_income
+                    
+                    # Calculate spouse pension income if enabled
+                    spouse_pension_income = 0
+                    if pension_plan.spouse_enabled:
+                        spouse_state_pension = pension_plan.spouse_state_pension_annual_amount or 0
+                        spouse_uss_pension = pension_plan.spouse_uss_projected_annual_pension or 0
+                        spouse_uss_avc_value = pension_plan.spouse_uss_avc_projected_value or 0
+                        spouse_sipp_value = pension_plan.spouse_sipp_projected_value or 0
+                        
+                        spouse_uss_avc_income = spouse_uss_avc_value * 0.04
+                        spouse_sipp_income = spouse_sipp_value * 0.04
+                        
+                        spouse_pension_income = spouse_state_pension + spouse_uss_pension + spouse_uss_avc_income + spouse_sipp_income
+                    
+                    # Total household pension income
+                    total_pension_income = primary_pension_income + spouse_pension_income
                     
                     # Convert to base currency (EUR)
                     total_pension_income = to_base_currency(total_pension_income, 'GBP')
                     
-                    st.sidebar.success(f"✅ Pension Income: {format_currency(from_base_currency(total_pension_income, selected_currency), selected_currency)}/year")
+                    st.sidebar.success(f"✅ Household Pension Income: {format_currency(from_base_currency(total_pension_income, selected_currency), selected_currency)}/year")
                     
                     with st.sidebar.expander("📊 Pension Breakdown"):
-                        st.write(f"**State Pension:** £{state_pension:,.0f}")
-                        st.write(f"**USS Pension:** £{uss_pension:,.0f}")
+                        st.write("**Your Pensions:**")
+                        st.write(f"  State Pension: £{state_pension:,.0f}")
+                        st.write(f"  USS Pension: £{uss_pension:,.0f}")
                         if uss_avc_income > 0:
-                            st.write(f"**USS AVC (4%):** £{uss_avc_income:,.0f}")
+                            st.write(f"  USS AVC (4%): £{uss_avc_income:,.0f}")
                         if sipp_income > 0:
-                            st.write(f"**SIPP (4%):** £{sipp_income:,.0f}")
+                            st.write(f"  SIPP (4%): £{sipp_income:,.0f}")
+                        st.write(f"**Your Total: £{primary_pension_income:,.0f}**")
+                        
+                        if pension_plan.spouse_enabled and spouse_pension_income > 0:
+                            st.write("")
+                            st.write("**Spouse Pensions:**")
+                            if spouse_state_pension > 0:
+                                st.write(f"  State Pension: £{spouse_state_pension:,.0f}")
+                            if spouse_uss_pension > 0:
+                                st.write(f"  USS Pension: £{spouse_uss_pension:,.0f}")
+                            if spouse_uss_avc_income > 0:
+                                st.write(f"  USS AVC (4%): £{spouse_uss_avc_income:,.0f}")
+                            if spouse_sipp_income > 0:
+                                st.write(f"  SIPP (4%): £{spouse_sipp_income:,.0f}")
+                            st.write(f"**Spouse Total: £{spouse_pension_income:,.0f}**")
+                            st.write("")
+                            st.write(f"**Household Total: £{primary_pension_income + spouse_pension_income:,.0f}**")
                         st.write(f"**Total:** £{state_pension + uss_pension + uss_avc_income + sipp_income:,.0f}")
             else:
                 st.sidebar.info("💡 Set up pension in Pension Planner tab")
@@ -1866,7 +2043,11 @@ with tab1:
                 starting_age=starting_age,
                 retirement_age=retirement_age,
                 pension_income=total_pension_income if use_pension_data else 0,
-                passive_income_streams=passive_streams
+                passive_income_streams=passive_streams,
+                include_spouse=include_spouse,
+                spouse_age=spouse_age,
+                spouse_retirement_age=spouse_retirement_age,
+                spouse_annual_income=st.session_state.get('base_spouse_annual_income', 0)
             )
             
             st.session_state['results'] = results
@@ -1876,6 +2057,11 @@ with tab1:
             st.session_state['simulation_years'] = simulation_years
             st.session_state['base_events'] = base_events
             st.session_state['monthly_mortgage_payment'] = calculated_payment
+            st.session_state['include_spouse'] = include_spouse
+            if include_spouse:
+                st.session_state['spouse_age'] = spouse_age
+                st.session_state['spouse_retirement_age'] = spouse_retirement_age
+                st.session_state['spouse_annual_income'] = spouse_annual_income
             
             if st.session_state.get('authenticated', False):
                 increment_simulation_count(st.session_state.user_id)
@@ -2249,7 +2435,11 @@ with tab1:
                 st.session_state.base_monthly_expenses,
                 st.session_state.base_liquid_wealth,
                 st.session_state.base_property_value,
-                st.session_state.base_mortgage
+                st.session_state.base_mortgage,
+                include_spouse=st.session_state.get('include_spouse', False),
+                spouse_age=st.session_state.get('spouse_age'),
+                spouse_retirement_age=st.session_state.get('spouse_retirement_age'),
+                spouse_annual_income=st.session_state.get('base_spouse_annual_income', 0)
             )
             
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -2277,7 +2467,11 @@ with tab1:
                     st.session_state.base_monthly_expenses,
                     st.session_state.base_liquid_wealth,
                     st.session_state.base_property_value,
-                    st.session_state.base_mortgage
+                    st.session_state.base_mortgage,
+                    include_spouse=st.session_state.get('include_spouse', False),
+                    spouse_age=st.session_state.get('spouse_age'),
+                    spouse_retirement_age=st.session_state.get('spouse_retirement_age'),
+                    spouse_annual_income=st.session_state.get('base_spouse_annual_income', 0)
                 )
                 
                 st.download_button(
@@ -2511,19 +2705,55 @@ with tab1:
             
             # Calculate cash flow (with salary inflation)
             cumulative_salary_growth = (1 + salary_inflation) ** year
-            year_income = gross_annual_income * cumulative_salary_growth
-            year_pension = year_income * pension_contribution_rate
-            year_tax = year_income * effective_tax_rate
-            year_takehome = year_income - year_pension - year_tax
+            current_age_projection = starting_age + year
+            is_retired_projection = current_age_projection > retirement_age
+            
+            # Primary income
+            if not is_retired_projection:
+                year_income = gross_annual_income * cumulative_salary_growth
+                year_pension = year_income * pension_contribution_rate
+                year_tax = year_income * effective_tax_rate
+                year_takehome = year_income - year_pension - year_tax
+            else:
+                # Use pension income from pension planner if available
+                if use_pension_data:
+                    year_takehome = total_pension_income
+                else:
+                    year_takehome = 0
+                year_pension = 0
+                year_tax = 0
+            
+            # Spouse income (if enabled)
+            spouse_takehome = 0
+            if include_spouse and spouse_annual_income > 0:
+                spouse_current_age = spouse_age + year
+                spouse_is_retired_projection = spouse_current_age > spouse_retirement_age
+                
+                if not spouse_is_retired_projection:
+                    spouse_income = spouse_annual_income * cumulative_salary_growth
+                    spouse_pension = spouse_income * pension_contribution_rate
+                    spouse_tax = spouse_income * effective_tax_rate
+                    spouse_takehome = spouse_income - spouse_pension - spouse_tax
+                # Note: spouse pension income will be added when pension planner is integrated
+            
+            # Total household income
+            total_household_takehome = year_takehome + spouse_takehome
             year_rental_annual = year_monthly_rental * 12
             year_expenses_annual = year_monthly_expenses * 12
             year_mortgage_annual = year_monthly_mortgage * 12
-            year_available = year_takehome + year_rental_annual + year_passive_income_annual - year_expenses_annual - year_mortgage_annual
+            year_available = total_household_takehome + year_rental_annual + year_passive_income_annual - year_expenses_annual - year_mortgage_annual
             
-            cashflow_projection.append({
+            projection_row = {
                 'Year': year,
                 'Age': starting_age + year,
                 'Take Home': format_currency(year_takehome, selected_currency),
+            }
+            
+            # Add spouse income column if enabled
+            if include_spouse:
+                projection_row['Spouse Income'] = format_currency(spouse_takehome, selected_currency) if spouse_takehome > 0 else "-"
+            
+            projection_row.update({
                 'Rental Income': format_currency(year_rental_annual, selected_currency) if year_rental_annual > 0 else "-",
                 'Passive Income': format_currency(year_passive_income_annual, selected_currency) if year_passive_income_annual > 0 else "-",
                 'Living Expenses': format_currency(year_expenses_annual, selected_currency),
@@ -2532,6 +2762,8 @@ with tab1:
                 'Monthly Savings': format_currency(year_available/12, selected_currency),
                 'Events This Year': ', '.join(event_notes) if event_notes else '-'
             })
+            
+            cashflow_projection.append(projection_row)
         
         projection_df = pd.DataFrame(cashflow_projection)
         

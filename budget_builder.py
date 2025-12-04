@@ -1,12 +1,13 @@
 """
-Budget Builder - WORKING VERSION
-All issues fixed: sidebar, template loading, value persistence
+Budget Builder - Monthly Expense Tracking
+Track expected vs actual expenses month by month
 """
 
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from datetime import datetime
+from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
 import json
 from currency_converter import convert_currency
 from currency_manager import format_currency
@@ -160,11 +161,72 @@ LIFE_EVENT_IMPACTS = {
 
 
 def show_budget_builder():
-    """Main budget builder interface"""
+    """Main budget builder interface with monthly tracking"""
     
     st.title("💰 Budget Builder")
-    st.markdown("Build detailed monthly budgets and plan life events")
+    st.markdown("Track expected vs actual expenses month by month")
     
+    # Initialize session state for new structure
+    if 'bb_expected' not in st.session_state:
+        st.session_state.bb_expected = {}
+    if 'bb_actuals' not in st.session_state:
+        st.session_state.bb_actuals = {}  # Format: {"2025-12": {category: amount}, ...}
+    if 'bb_current_month' not in st.session_state:
+        st.session_state.bb_current_month = datetime.now().strftime("%Y-%m")
+    if 'bb_counter' not in st.session_state:
+        st.session_state.bb_counter = 0
+    
+    # Month selector
+    st.markdown("---")
+    col_month, col_actions = st.columns([2, 1])
+    
+    with col_month:
+        # Get list of all months (current month + any historical months with data)
+        current_month = datetime.now().strftime("%Y-%m")
+        historical_months = sorted(st.session_state.bb_actuals.keys(), reverse=True)
+        
+        # Combine and deduplicate
+        all_months = list(dict.fromkeys([current_month] + historical_months))
+        
+        month_options = {month: datetime.strptime(month, "%Y-%m").strftime("%B %Y") for month in all_months}
+        
+        selected_month = st.selectbox(
+            "📅 Select Month",
+            options=all_months,
+            format_func=lambda x: month_options[x],
+            key="bb_month_selector"
+        )
+        st.session_state.bb_current_month = selected_month
+        
+        # Show if this is current month or historical
+        if selected_month == current_month:
+            st.caption("✨ Current month - track your spending!")
+        else:
+            st.caption(f"📊 Historical data from {month_options[selected_month]}")
+    
+    with col_actions:
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("➕ New Month", use_container_width=True):
+            # Generate list of next 12 months
+            from datetime import timedelta
+            from dateutil.relativedelta import relativedelta
+            
+            base_date = datetime.strptime(current_month, "%Y-%m")
+            future_months = [(base_date + relativedelta(months=i)).strftime("%Y-%m") for i in range(1, 13)]
+            
+            # Find first month not in actuals
+            next_month = None
+            for month in future_months:
+                if month not in st.session_state.bb_actuals:
+                    next_month = month
+                    break
+            
+            if next_month:
+                st.session_state.bb_actuals[next_month] = {cat: 0 for cat in st.session_state.bb_expected.keys()}
+                st.session_state.bb_current_month = next_month
+                st.rerun()
+            else:
+                st.warning("All months for next year already exist!")
     # Save/Load Budget Controls
     if st.session_state.get('authenticated', False):
         with st.expander("💾 Save / Load Budgets", expanded=False):
@@ -198,10 +260,18 @@ def show_budget_builder():
                                     current_currency = st.session_state.get('selected_currency', 'EUR')
                                     saved_currency = data.get('currency', 'EUR')
                                     
-                                    # Restore budget data to session state
-                                    st.session_state.bb_now = data['budget_now']
-                                    st.session_state.bb_1yr = data['budget_1yr']
-                                    st.session_state.bb_5yr = data['budget_5yr']
+                                    # Restore budget data to session state based on format
+                                    if data.get('format') == 'monthly':
+                                        # New monthly tracking format
+                                        st.session_state.bb_expected = data['budget_expected']
+                                        st.session_state.bb_actuals = data['budget_actuals']
+                                        st.session_state.bb_current_month = data['current_month']
+                                    else:
+                                        # Legacy format - convert budget_now to expected, initialize empty actuals
+                                        st.session_state.bb_expected = data['budget_now']
+                                        st.session_state.bb_actuals = {}
+                                        st.session_state.bb_current_month = datetime.now().strftime('%Y-%m')
+                                    
                                     st.session_state.bb_events = data['life_events']
                                     
                                     # Increment counter to force widget refresh with loaded values
@@ -239,9 +309,7 @@ def show_budget_builder():
                 st.subheader("💾 Save Current Budget")
                 
                 # Check if there's a budget to save
-                has_budget = (st.session_state.get('bb_now') or 
-                             st.session_state.get('bb_1yr') or 
-                             st.session_state.get('bb_5yr'))
+                has_budget = bool(st.session_state.get('bb_expected'))
                 
                 if has_budget:
                     save_budget_name = st.text_input(
@@ -263,16 +331,17 @@ def show_budget_builder():
                         success, result = save_budget(
                             st.session_state.user_id,
                             save_budget_name,
-                            st.session_state.get('bb_now', {}),
-                            st.session_state.get('bb_1yr', {}),
-                            st.session_state.get('bb_5yr', {}),
-                            st.session_state.get('bb_events', []),
-                            save_budget_desc if save_budget_desc else None,
-                            current_currency  # Pass the currency
+                            budget_expected=st.session_state.get('bb_expected', {}),
+                            budget_actuals=st.session_state.get('bb_actuals', {}),
+                            current_month=st.session_state.get('bb_current_month', datetime.now().strftime('%Y-%m')),
+                            life_events=st.session_state.get('bb_events', []),
+                            description=save_budget_desc if save_budget_desc else None,
+                            currency=current_currency
                         )
                         
                         if success:
                             st.success(f"✅ Saved as: {save_budget_name} ({current_currency})")
+                            st.rerun()  # Refresh to show new budget in load list
                         else:
                             st.error(f"❌ Error: {result}")
                 else:
@@ -290,9 +359,8 @@ def show_budget_builder():
         old_currency = st.session_state.bb_last_currency
         
         # Clear all budget values to prevent semantic currency flip
-        st.session_state.bb_now = {}
-        st.session_state.bb_1yr = {}
-        st.session_state.bb_5yr = {}
+        st.session_state.bb_expected = {}
+        st.session_state.bb_actuals = {}
         st.session_state.bb_events = []
         
         # Update currency tracker
@@ -342,19 +410,12 @@ def show_budget_builder():
         st.write(f"Local currency_symbol: {currency_symbol}")
         st.write(f"Test format_currency(1000, '{currency_code}'): {format_currency(1000, currency_code)}")
     
-    # Initialize session state
-    if 'bb_now' not in st.session_state:
-        st.session_state.bb_now = {}
-    if 'bb_1yr' not in st.session_state:
-        st.session_state.bb_1yr = {}
-    if 'bb_5yr' not in st.session_state:
-        st.session_state.bb_5yr = {}
+    # Note: Session state initialization happens at top of file (lines 168-175)
     if 'bb_events' not in st.session_state:
         st.session_state.bb_events = []
-    if 'bb_counter' not in st.session_state:
-        st.session_state.bb_counter = 0
     
     # Template selection
+    st.markdown("---")
     st.subheader("🎯 Quick Start with Template")
     
     col1, col2, col3 = st.columns([2, 1, 1])
@@ -362,7 +423,7 @@ def show_budget_builder():
     with col1:
         pay_bracket = st.selectbox(
             "Annual Pay Bracket",
-            options=list(PAY_BRACKETS_DISPLAY.keys()),
+            options=list(PAY_BRACKETS.keys()),
             format_func=lambda x: PAY_BRACKETS_DISPLAY[x],
             key="bb_pay_bracket"
         )
@@ -377,98 +438,96 @@ def show_budget_builder():
                 converted_template = {}
                 for category, amount in template.items():
                     try:
-                        # Convert from EUR to selected currency
                         converted_amount = convert_currency(amount, 'EUR', currency_code)
-                        # Round to nearest integer for cleaner display
                         converted_template[category] = round(converted_amount)
                     except (ValueError, KeyError, TypeError) as e:
                         st.warning(f"Error converting {category}: {e}")
                         converted_template[category] = amount
                 
-                st.session_state.bb_now = converted_template
-                st.session_state.bb_1yr = dict(converted_template)
-                st.session_state.bb_5yr = dict(converted_template)
+                st.session_state.bb_expected = converted_template
                 st.success(f"✅ Template loaded and converted to {currency_code}!")
             else:
-                # EUR - use template as-is
-                st.session_state.bb_now = dict(template)
-                st.session_state.bb_1yr = dict(template)
-                st.session_state.bb_5yr = dict(template)
+                st.session_state.bb_expected = dict(template)
                 st.success("✅ Template loaded!")
             
-            st.session_state.bb_counter += 1  # Force widget refresh
+            st.session_state.bb_counter += 1
             st.rerun()
     
     with col3:
         if st.button("🗑️ Clear All", use_container_width=True, key="bb_clear_btn"):
-            st.session_state.bb_now = {}
-            st.session_state.bb_1yr = {}
-            st.session_state.bb_5yr = {}
+            st.session_state.bb_expected = {}
+            st.session_state.bb_actuals = {}
             st.session_state.bb_events = []
             st.session_state.bb_counter += 1
             st.success("✅ Cleared!")
             st.rerun()
     
     st.markdown("---")
-    st.subheader("📊 Monthly Budget Timeline")
+    st.subheader("📊 Monthly Budget - Expected vs Actual")
     
     # Get all categories
-    all_categories = set(st.session_state.bb_now.keys()) | set(st.session_state.bb_1yr.keys()) | set(st.session_state.bb_5yr.keys())
+    all_categories = set(st.session_state.bb_expected.keys())
+    if selected_month in st.session_state.bb_actuals:
+        all_categories |= set(st.session_state.bb_actuals[selected_month].keys())
     
     if not all_categories:
-        for cat in ['Housing', 'Utilities', 'Groceries', 'Transportation', 'Healthcare', 
-                   'Entertainment', 'Dining Out', 'Personal Care', 'Clothing', 'Insurance', 'Other']:
-            st.session_state.bb_now[cat] = 0
-            st.session_state.bb_1yr[cat] = 0
-            st.session_state.bb_5yr[cat] = 0
-        all_categories = set(st.session_state.bb_now.keys())
+        # Initialize with default categories
+        default_cats = ['Housing', 'Utilities', 'Groceries', 'Transportation', 'Healthcare', 
+                       'Entertainment', 'Dining Out', 'Personal Care', 'Clothing', 'Insurance', 'Other']
+        for cat in default_cats:
+            st.session_state.bb_expected[cat] = 0
+        all_categories = set(default_cats)
     
     categories_sorted = sorted(all_categories)
     
-    # Headers
-    col_now, col_1yr, col_5yr = st.columns(3)
-    with col_now:
-        st.markdown("### 📅 Now")
-    with col_1yr:
-        st.markdown("### 📅 1 Year")
-    with col_5yr:
-        st.markdown("### 📅 5 Years")
+    # Ensure actuals dict exists for current month
+    if selected_month not in st.session_state.bb_actuals:
+        st.session_state.bb_actuals[selected_month] = {cat: 0 for cat in categories_sorted}
     
-    # Build inputs - use counter to force refresh
+    # Headers
+    col_expected, col_actual, col_variance = st.columns([2, 2, 1])
+    with col_expected:
+        st.markdown("### 💰 Expected")
+    with col_actual:
+        st.markdown("### 📝 Actual")
+    with col_variance:
+        st.markdown("### 📊 Diff")
+    
+    # Build inputs
     for category in categories_sorted:
-        col_now, col_1yr, col_5yr = st.columns(3)
+        col_expected, col_actual, col_variance = st.columns([2, 2, 1])
         
-        with col_now:
+        with col_expected:
             val = st.number_input(
                 category,
                 min_value=0,
-                value=int(st.session_state.bb_now.get(category, 0)),
+                value=int(st.session_state.bb_expected.get(category, 0)),
                 step=50,
-                key=f"bb_now_{category}_{st.session_state.bb_counter}"
+                key=f"bb_expected_{category}_{st.session_state.bb_counter}"
             )
-            st.session_state.bb_now[category] = val
+            st.session_state.bb_expected[category] = val
         
-        with col_1yr:
-            val = st.number_input(
+        with col_actual:
+            actual_val = st.number_input(
                 category,
                 min_value=0,
-                value=int(st.session_state.bb_1yr.get(category, 0)),
+                value=int(st.session_state.bb_actuals[selected_month].get(category, 0)),
                 step=50,
-                key=f"bb_1yr_{category}_{st.session_state.bb_counter}",
-                # label_visibility="collapsed"
+                key=f"bb_actual_{category}_{selected_month}_{st.session_state.bb_counter}"
             )
-            st.session_state.bb_1yr[category] = val
+            st.session_state.bb_actuals[selected_month][category] = actual_val
         
-        with col_5yr:
-            val = st.number_input(
-                category,
-                min_value=0,
-                value=int(st.session_state.bb_5yr.get(category, 0)),
-                step=50,
-                key=f"bb_5yr_{category}_{st.session_state.bb_counter}",
-                # label_visibility="collapsed"
-            )
-            st.session_state.bb_5yr[category] = val
+        with col_variance:
+            diff = actual_val - val
+            if diff != 0:
+                color = "🔴" if diff > 0 else "🟢"
+                st.metric(category, f"{abs(diff):.0f}", delta=None, label_visibility="collapsed")
+                if diff > 0:
+                    st.caption(f"{color} +{diff:.0f}")
+                else:
+                    st.caption(f"{color} {diff:.0f}")
+            else:
+                st.caption("✅ On track")
     
     # Add custom category
     st.markdown("---")
@@ -478,51 +537,103 @@ def show_budget_builder():
     with col_add2:
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("➕ Add", use_container_width=True, key="bb_add_cat"):
-            if new_category and new_category not in st.session_state.bb_now:
-                st.session_state.bb_now[new_category] = 0
-                st.session_state.bb_1yr[new_category] = 0
-                st.session_state.bb_5yr[new_category] = 0
+            if new_category and new_category not in st.session_state.bb_expected:
+                st.session_state.bb_expected[new_category] = 0
+                for month in st.session_state.bb_actuals:
+                    st.session_state.bb_actuals[month][new_category] = 0
                 st.session_state.bb_counter += 1
                 st.success(f"✅ Added {new_category}")
                 st.rerun()
     
-    # Calculate totals from session state
-    total_now = sum(st.session_state.bb_now.values())
-    total_1yr = sum(st.session_state.bb_1yr.values())
-    total_5yr = sum(st.session_state.bb_5yr.values())
+    # Calculate totals
+    total_expected = sum(st.session_state.bb_expected.values())
+    total_actual = sum(st.session_state.bb_actuals[selected_month].values())
+    total_diff = total_actual - total_expected
     
     st.markdown("---")
     st.subheader("📈 Budget Summary")
     
     sum_col1, sum_col2, sum_col3 = st.columns(3)
     with sum_col1:
-        st.metric("Now (Monthly)", format_currency(total_now, currency_code))
-        st.caption(f"Annual: {format_currency(total_now * 12, currency_code)}")
+        st.metric("Expected (Monthly)", format_currency(total_expected, currency_code))
+        st.caption(f"Annual: {format_currency(total_expected * 12, currency_code)}")
     with sum_col2:
-        delta_1yr = total_1yr - total_now
-        st.metric("1 Year (Monthly)", format_currency(total_1yr, currency_code), 
-                 delta=format_currency(delta_1yr, currency_code))
-        st.caption(f"Annual: {format_currency(total_1yr * 12, currency_code)}")
+        st.metric("Actual (Monthly)", format_currency(total_actual, currency_code))
+        st.caption(f"Annual: {format_currency(total_actual * 12, currency_code)}")
     with sum_col3:
-        delta_5yr = total_5yr - total_now
-        st.metric("5 Years (Monthly)", format_currency(total_5yr, currency_code), 
-                 delta=format_currency(delta_5yr, currency_code))
-        st.caption(f"Annual: {format_currency(total_5yr * 12, currency_code)}")
+        variance_pct = ((total_diff / total_expected) * 100) if total_expected > 0 else 0
+        st.metric("Variance", format_currency(abs(total_diff), currency_code), 
+                 delta=f"{variance_pct:+.1f}%")
+        if total_diff > 0:
+            st.caption("🔴 Over budget")
+        elif total_diff < 0:
+            st.caption("🟢 Under budget")
+        else:
+            st.caption("✅ On budget")
     
     # Visualization
     st.markdown("---")
     st.subheader("📊 Budget Breakdown")
     
+    # currency_symbol already defined above, no need to redefine
+    
     fig = go.Figure()
-    fig.add_trace(go.Bar(name='Now', x=categories_sorted,
-        y=[st.session_state.bb_now.get(cat, 0) for cat in categories_sorted], marker_color='lightblue'))
-    fig.add_trace(go.Bar(name='1 Year', x=categories_sorted,
-        y=[st.session_state.bb_1yr.get(cat, 0) for cat in categories_sorted], marker_color='lightgreen'))
-    fig.add_trace(go.Bar(name='5 Years', x=categories_sorted,
-        y=[st.session_state.bb_5yr.get(cat, 0) for cat in categories_sorted], marker_color='lightcoral'))
-    fig.update_layout(barmode='group', title="Monthly Budget Comparison", 
-                     xaxis_title="Category", yaxis_title=f"Amount ({currency_symbol})", height=400)
+    fig.add_trace(go.Bar(
+        name='Expected',
+        x=categories_sorted,
+        y=[st.session_state.bb_expected.get(cat, 0) for cat in categories_sorted],
+        marker_color='lightblue'
+    ))
+    fig.add_trace(go.Bar(
+        name='Actual',
+        x=categories_sorted,
+        y=[st.session_state.bb_actuals[selected_month].get(cat, 0) for cat in categories_sorted],
+        marker_color='lightcoral'
+    ))
+    fig.update_layout(
+        barmode='group',
+        title=f"Expected vs Actual - {month_options[selected_month]}",
+        xaxis_title="Category",
+        yaxis_title=f"Amount ({currency_symbol})",
+        height=400
+    )
     st.plotly_chart(fig, use_container_width=True)
+    
+    # Monthly trend if multiple months exist
+    if len(st.session_state.bb_actuals) > 1:
+        st.markdown("---")
+        st.subheader("📈 Monthly Spending Trend")
+        
+        # Get sorted months
+        sorted_months = sorted(st.session_state.bb_actuals.keys())
+        month_labels = [datetime.strptime(m, "%Y-%m").strftime("%b %Y") for m in sorted_months]
+        
+        # Calculate totals for each month
+        monthly_expected = [total_expected] * len(sorted_months)  # Expected stays constant
+        monthly_actual = [sum(st.session_state.bb_actuals[m].values()) for m in sorted_months]
+        
+        fig_trend = go.Figure()
+        fig_trend.add_trace(go.Scatter(
+            x=month_labels,
+            y=monthly_expected,
+            mode='lines+markers',
+            name='Expected',
+            line=dict(color='blue', dash='dash')
+        ))
+        fig_trend.add_trace(go.Scatter(
+            x=month_labels,
+            y=monthly_actual,
+            mode='lines+markers',
+            name='Actual',
+            line=dict(color='red')
+        ))
+        fig_trend.update_layout(
+            title="Monthly Spending Over Time",
+            xaxis_title="Month",
+            yaxis_title=f"Total ({currency_symbol})",
+            height=300
+        )
+        st.plotly_chart(fig_trend, use_container_width=True)
     
     # Life Events
     st.markdown("---")
@@ -615,28 +726,25 @@ def show_budget_builder():
     
     col_int1, col_int2 = st.columns(2)
     with col_int1:
-        st.metric("Monthly Expenses to Use", format_currency(total_now, currency_code))
+        st.metric("Expected Monthly Expenses", format_currency(total_expected, currency_code))
     with col_int2:
         st.metric("Financial Events", len(st.session_state.bb_events))
     
     if st.button("🚀 Go to Simulation with This Budget", type="primary", use_container_width=True, key="bb_go_sim"):
-        if total_now <= 0:
-            st.error("⚠️ Please set budget values before using in simulation.")
+        if total_expected <= 0:
+            st.error("⚠️ Please set expected budget values before using in simulation.")
         else:
             # Store in different keys to avoid conflicts
             st.session_state.use_budget_builder = True
-            st.session_state.budget_monthly_expenses = int(total_now)
-            st.session_state.budget_currency = currency_code  # Store the currency the budget was created in
+            st.session_state.budget_monthly_expenses = int(total_expected)
+            st.session_state.budget_currency = currency_code
             st.session_state.budget_events_list = [e.copy() for e in st.session_state.bb_events]
             
             # Set flags for user feedback
             st.session_state.just_set_budget = True
             
-            st.success(f"✅ Budget ready! Monthly: {format_currency(total_now, currency_code)}")
+            st.success(f"✅ Budget ready! Monthly: {format_currency(total_expected, currency_code)}")
             st.info("👈 Switch to the **Simulation** tab to use this budget")
-            
-            # Note: Streamlit tabs don't support programmatic switching,
-            # but we show a clear message to guide the user
 
 
 if __name__ == "__main__":
