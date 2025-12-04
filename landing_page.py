@@ -1,19 +1,79 @@
 """
-Professional Landing Page for FinSim
-Replace your show_login_page() function with this enhanced version
+Professional Landing Page for FinSim with integrated static pages
 """
 
 import streamlit as st
 from auth import initialize_session_state, login_user, register_user, logout
 
 
+def show_about_page():
+    """About page content"""
+    from static_pages.about import show_about
+    show_about()
+
+
+def show_privacy_page():
+    """Privacy policy page content"""
+    from static_pages.privacy import show_privacy
+    show_privacy()
+
+
+def show_terms_page():
+    """Terms of service page content"""
+    from static_pages.terms import show_terms
+    show_terms()
+
+
+def show_contact_page():
+    """Contact page content"""
+    from static_pages.contact import show_contact
+    show_contact()
+
+
+def show_docs_page():
+    """Documentation page content"""
+    from static_pages.docs import show_docs
+    show_docs()
+
+
 def show_landing_page():
     """
-    Professional landing page with login
-    Combines marketing + authentication
+    Professional landing page with login and routing
+    Combines marketing + authentication + static pages
     """
     initialize_session_state()
     
+    # Check for query parameters to route to different pages
+    try:
+        query_params = st.query_params
+        # In Streamlit 1.51+, query_params is a dict-like object
+        if hasattr(query_params, 'get_all'):
+            # Newer API
+            page_list = query_params.get_all('page')
+            page = page_list[0] if page_list else None
+        else:
+            # Fallback
+            page = query_params.get('page', None)
+    except:
+        page = None
+    
+    if page == 'about':
+        show_about_page()
+        return
+    elif page == 'privacy':
+        show_privacy_page()
+        return
+    elif page == 'terms':
+        show_terms_page()
+        return
+    elif page == 'contact':
+        show_contact_page()
+        return
+    elif page == 'docs':
+        show_docs_page()
+        return
+    
+    # Main landing page content
     # Custom CSS for landing page
     st.markdown("""
         <style>
@@ -121,6 +181,27 @@ def show_landing_page():
         </div>
     """, unsafe_allow_html=True)
     
+    # Quick links bar with working navigation
+    col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+    with col1:
+        if st.button("📚 Documentation", key="nav_docs", use_container_width=True):
+            st.query_params['page'] = 'docs'
+            st.rerun()
+    with col2:
+        if st.button("ℹ️ About", key="nav_about", use_container_width=True):
+            st.query_params['page'] = 'about'
+            st.rerun()
+    with col3:
+        if st.button("📧 Contact", key="nav_contact", use_container_width=True):
+            st.query_params['page'] = 'contact'
+            st.rerun()
+    with col4:
+        if st.button("🔒 Privacy & Terms", key="nav_privacy", use_container_width=True):
+            st.query_params['page'] = 'privacy'
+            st.rerun()
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
     # Social Proof Stats
     st.markdown("""
         <div class="stat-container">
@@ -195,6 +276,14 @@ def show_landing_page():
                 country = st.text_input("Country (Optional)", key="reg_country")
                 
                 st.markdown("---")
+                
+                # Note about legal docs
+                st.markdown("""
+                    <p style="font-size: 0.85rem; text-align: center; color: #666;">
+                        By creating an account, you agree to our Terms and Privacy Policy<br>
+                        (Use footer buttons to view these documents)
+                    </p>
+                """, unsafe_allow_html=True)
                 
                 consent = st.checkbox(
                     "I agree to share anonymized data for research (helps keep FinSim free)",
@@ -301,15 +390,30 @@ def show_landing_page():
     
     # Footer
     st.markdown("---")
+    
+    # Footer navigation buttons
+    st.markdown("<p style='text-align: center; color: #666;'><strong>FinSim</strong> - Plan Your Financial Future with Confidence</p>", unsafe_allow_html=True)
+    
+    footer_col1, footer_col2, footer_col3, footer_col4 = st.columns(4)
+    with footer_col1:
+        if st.button("About", key="footer_about", use_container_width=True):
+            st.query_params['page'] = 'about'
+            st.rerun()
+    with footer_col2:
+        if st.button("Privacy", key="footer_privacy", use_container_width=True):
+            st.query_params['page'] = 'privacy'
+            st.rerun()
+    with footer_col3:
+        if st.button("Terms", key="footer_terms", use_container_width=True):
+            st.query_params['page'] = 'terms'
+            st.rerun()
+    with footer_col4:
+        if st.button("Contact", key="footer_contact", use_container_width=True):
+            st.query_params['page'] = 'contact'
+            st.rerun()
+    
     st.markdown("""
-        <div style="text-align: center; color: #666; padding: 2rem 0;">
-            <p><strong>FinSim</strong> - Plan Your Financial Future with Confidence</p>
-            <p style="font-size: 0.9rem;">
-                <a href="#" style="color: #667eea; text-decoration: none;">About</a> • 
-                <a href="#" style="color: #667eea; text-decoration: none;">Privacy</a> • 
-                <a href="#" style="color: #667eea; text-decoration: none;">Terms</a> • 
-                <a href="#" style="color: #667eea; text-decoration: none;">Contact</a>
-            </p>
+        <div style="text-align: center; color: #666; padding: 1rem 0;">
             <p style="font-size: 0.8rem; opacity: 0.7;">
                 Educational tool only. Not financial advice. Consult a professional advisor.
             </p>

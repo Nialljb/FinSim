@@ -39,6 +39,12 @@ class User(Base):
     target_retirement_age = Column(Integer, nullable=True)
     country = Column(String(100), nullable=True)
     
+    # Spouse/partner data
+    has_spouse = Column(Boolean, default=False)
+    spouse_age = Column(Integer, nullable=True)
+    spouse_retirement_age = Column(Integer, nullable=True)
+    spouse_annual_income = Column(Float, nullable=True)  # Stored in base currency (EUR)
+    
     # Account status
     is_active = Column(Boolean, default=True)
     email_verified = Column(Boolean, default=False)
@@ -310,6 +316,37 @@ class PensionPlan(Base):
     
     # Other pensions (workplace, private, etc.)
     other_pensions = Column(JSON, nullable=True)  # List of other pension schemes
+    
+    # Spouse/Partner pension planning
+    spouse_enabled = Column(Boolean, default=False)
+    spouse_age = Column(Integer, nullable=True)
+    spouse_retirement_age = Column(Integer, nullable=True)
+    spouse_annual_income = Column(Float, default=0)
+    
+    # Spouse State Pension
+    spouse_state_pension_enabled = Column(Boolean, default=False)
+    spouse_state_pension_ni_years = Column(Integer, default=0)
+    spouse_state_pension_projected_years = Column(Integer, default=0)
+    spouse_state_pension_annual_amount = Column(Float, default=0)
+    
+    # Spouse USS Pension
+    spouse_uss_enabled = Column(Boolean, default=False)
+    spouse_uss_current_salary = Column(Float, default=0)
+    spouse_uss_years_in_scheme = Column(Integer, default=0)
+    spouse_uss_projected_annual_pension = Column(Float, default=0)
+    spouse_uss_projected_lump_sum = Column(Float, default=0)
+    spouse_uss_avc_enabled = Column(Boolean, default=False)
+    spouse_uss_avc_annual_amount = Column(Float, default=0)
+    spouse_uss_avc_current_value = Column(Float, default=0)
+    spouse_uss_avc_projected_value = Column(Float, default=0)
+    
+    # Spouse SIPP
+    spouse_sipp_enabled = Column(Boolean, default=False)
+    spouse_sipp_current_value = Column(Float, default=0)
+    spouse_sipp_annual_contribution = Column(Float, default=0)
+    spouse_sipp_employer_contribution = Column(Float, default=0)
+    spouse_sipp_projected_value = Column(Float, default=0)
+    spouse_sipp_growth_rate = Column(Float, default=0.05)
     
     # Retirement income planning
     desired_retirement_income = Column(Float, default=0)  # Annual amount desired
@@ -667,7 +704,52 @@ def delete_passive_income_stream(stream_id, user_id):
     finally:
         db.close()
 
+
+def submit_contact_form(name, email, subject, message, user_id=None, include_system_info=False):
+    """Submit a contact form message as feedback"""
+    db = SessionLocal()
+    try:
+        # Map subject to feedback_type
+        subject_mapping = {
+            "General Inquiry": "general",
+            "Technical Support": "issue",
+            "Bug Report": "bug",
+            "Feature Request": "feature",
+            "Account Issue": "issue",
+            "Data/Privacy Question": "general",
+            "Partnership Inquiry": "general",
+            "Other": "general"
+        }
+        
+        feedback_type = subject_mapping.get(subject, "general")
+        
+        # Create formatted message with contact info
+        formatted_message = f"From: {name}\nEmail: {email}\n\n{message}"
+        
+        if include_system_info:
+            formatted_message += f"\n\n--- System Info Included ---"
+        
+        feedback = Feedback(
+            user_id=user_id if user_id else 1,  # Use 1 for anonymous/guest submissions
+            feedback_type=feedback_type,
+            subject=subject,
+            message=formatted_message,
+            user_email=email,
+            page_context="Contact Form",
+            status="new"
+        )
+        
+        db.add(feedback)
+        db.commit()
+        return True, "Message sent successfully!"
+    except Exception as e:
+        db.rollback()
+        return False, f"Error submitting message: {str(e)}"
+    finally:
+        db.close()
+
         
 if __name__ == "__main__":
+
     # Initialize database when run directly
     init_db()
