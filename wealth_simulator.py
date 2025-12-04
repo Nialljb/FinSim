@@ -15,7 +15,7 @@ import plotly.io as pio
 from auth import initialize_session_state, show_login_page, show_user_header, check_simulation_limit, increment_simulation_count, increment_export_count, reset_simulation_count
 from data_tracking import save_simulation, save_full_simulation, load_simulation, get_user_simulations, delete_simulation, update_simulation_name
 from database import init_db
-from alt_landing_page import show_landing_page
+from landing_page import show_landing_page
 from currency_converter import get_exchange_rates, convert_currency, show_currency_info
 
 # ADD THESE LINES after the existing currency_converter import:
@@ -43,7 +43,7 @@ initialize_currency_system()
 # Set page config - ONCE at the top
 st.set_page_config(
     page_title="FinSim - Financial Planning",
-    page_icon="💰",
+    page_icon="🐬",
     layout="wide",
 )
 

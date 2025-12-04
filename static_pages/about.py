@@ -24,30 +24,30 @@ def show_about():
         border-left: 4px solid #667eea;
     }
     </style>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
-# Hero
-st.markdown("""
+    # Hero
+    st.markdown("""
     <div class="hero-section">
-        <h1>🦉 About FinSim</h1>
-        <p style="font-size: 1.2rem;">Your Free Financial Future Planning Tool</p>
+        <h1>🐬 About FinSim</h1>
+        <p style="font-size: 1.2rem;">Your Financial Future Planning Tool</p>
     </div>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
-# Mission
-st.markdown("""
+    # Mission
+    st.markdown("""
     <div class="content-section">
         <h2>📋 Our Mission</h2>
         <p style="font-size: 1.1rem;">
-            FinSim was created to make sophisticated financial planning tools accessible to everyone. 
+            FinSim (Financial Simulator) was created to understand factors affecting your financial future and make financial planning tools accessible to everyone. 
             We believe that understanding your financial future shouldn't require expensive software 
             or financial advisors for basic projections.
         </p>
     </div>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
-# What We Do
-st.markdown("""
+    # What We Do
+    st.markdown("""
     <div class="content-section">
         <h2>🎯 What We Do</h2>
         <p>FinSim uses <strong>Monte Carlo simulation</strong> to project thousands of possible financial 
@@ -59,57 +59,57 @@ st.markdown("""
             <li><strong>Informed decisions:</strong> Compare different financial strategies</li>
         </ul>
     </div>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
-# Key Features
-col1, col2 = st.columns(2)
+    # Key Features
+    col1, col2 = st.columns(2)
 
-with col1:
-    st.markdown("""
+    with col1:
+        st.markdown("""
         <div class="content-section">
             <h3>🎲 Monte Carlo Simulation</h3>
             <p>Run 1,000+ scenarios with varying market returns, inflation, and life events to see the full range of possible outcomes.</p>
         </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("""
+        """, unsafe_allow_html=True)
+        
+        st.markdown("""
         <div class="content-section">
             <h3>🏠 Real Estate Modeling</h3>
             <p>Include property purchases, sales, mortgages, and rental income in your long-term projections.</p>
         </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("""
+        """, unsafe_allow_html=True)
+        
+        st.markdown("""
         <div class="content-section">
             <h3>💰 Budget Builder</h3>
             <p>Track monthly expenses with expected vs actual budgeting across all major categories.</p>
         </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
-with col2:
-    st.markdown("""
+    with col2:
+        st.markdown("""
         <div class="content-section">
             <h3>👨‍👩‍👧 Life Events</h3>
             <p>Model children, career changes, relocations, and major expenses to see their long-term impact.</p>
         </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("""
+        """, unsafe_allow_html=True)
+        
+        st.markdown("""
         <div class="content-section">
             <h3>💱 Multi-Currency Support</h3>
             <p>Support for 15+ currencies including USD, CAD, EUR, GBP, JPY, AUD, and more.</p>
         </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("""
+        """, unsafe_allow_html=True)
+        
+        st.markdown("""
         <div class="content-section">
             <h3>📊 Export & Reports</h3>
             <p>Download professional PDF reports and detailed Excel spreadsheets with all your data.</p>
         </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
-# Who It's For
-st.markdown("""
+    # Who It's For
+    st.markdown("""
     <div class="content-section">
         <h2>👥 Who It's For</h2>
         <ul>
@@ -120,25 +120,26 @@ st.markdown("""
             <li><strong>International Households:</strong> Managing finances across multiple currencies</li>
         </ul>
     </div>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
-# How It's Free
-st.markdown("""
+    # How It's Free
+    st.markdown("""
     <div class="content-section">
         <h2>💸 How is FinSim Free?</h2>
-        <p>FinSim is maintained as an educational project. We keep costs low by:</p>
+        <p>FinSim is developed and maintained as a personal project. We keep costs low by:</p>
         <ul>
             <li>Using efficient cloud infrastructure</li>
             <li>Collecting anonymized usage data for research (with your consent)</li>
             <li>Rate limiting to 10 simulations per month for free users</li>
             <li>Keeping the codebase simple and maintainable</li>
+            <li>No ads. No selling personal data. No hidden fees.</li>
         </ul>
-        <p><strong>No ads. No selling your data. No hidden fees.</strong></p>
+        <p><strong>Hosting does cost money, so do your part by supporting the project if you can.</strong></p>
     </div>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
-# Important Disclaimer
-st.markdown("""
+    # Important Disclaimer
+    st.markdown("""
     <div class="content-section" style="border-left-color: #f44336;">
         <h2>⚠️ Important Disclaimer</h2>
         <p><strong>FinSim is an educational tool only.</strong> It is NOT financial advice. Always consult 
@@ -151,10 +152,10 @@ st.markdown("""
             <li>Does not replace professional financial planning</li>
         </ul>
     </div>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
-# The Story
-st.markdown("""
+    # The Story
+    st.markdown("""
     <div class="content-section">
         <h2>📖 The Story</h2>
         <p>FinSim started as a personal project to understand Monte Carlo simulations and their 
@@ -162,7 +163,7 @@ st.markdown("""
         a comprehensive financial planning tool.</p>
         <p>Built with Python, Streamlit, and a lot of coffee ☕</p>
     </div>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
     # Footer
     st.markdown("---")

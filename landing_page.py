@@ -148,6 +148,10 @@ def show_landing_page():
             width: 100%;
             border-radius: 8px;
             padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
             font-weight: 600;
         }
         
@@ -173,40 +177,19 @@ def show_landing_page():
     # Hero Section
     st.markdown("""
         <div class="hero">
-            <h1>🦉 FinSim</h1>
+            <h1>🐬 FinSim</h1>
             <p>Plan Your Financial Future with Confidence</p>
             <p style="font-size: 1rem; opacity: 0.9;">
-                Monte Carlo simulations • Retirement planning • Real estate modeling • 100% Free
+                Monte Carlo simulations • Retirement planning • Real estate modeling • Life event forecasting
             </p>
         </div>
     """, unsafe_allow_html=True)
-    
-    # Quick links bar with working navigation
-    col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
-    with col1:
-        if st.button("📚 Documentation", key="nav_docs", use_container_width=True):
-            st.query_params['page'] = 'docs'
-            st.rerun()
-    with col2:
-        if st.button("ℹ️ About", key="nav_about", use_container_width=True):
-            st.query_params['page'] = 'about'
-            st.rerun()
-    with col3:
-        if st.button("📧 Contact", key="nav_contact", use_container_width=True):
-            st.query_params['page'] = 'contact'
-            st.rerun()
-    with col4:
-        if st.button("🔒 Privacy & Terms", key="nav_privacy", use_container_width=True):
-            st.query_params['page'] = 'privacy'
-            st.rerun()
-    
-    st.markdown("<br>", unsafe_allow_html=True)
     
     # Social Proof Stats
     st.markdown("""
         <div class="stat-container">
             <div class="stat-box">
-                <div class="stat-number">100+</div>
+                <div class="stat-number">1000+</div>
                 <div class="stat-label">Simulations Run</div>
             </div>
             <div class="stat-box">
@@ -218,10 +201,23 @@ def show_landing_page():
                 <div class="stat-label">Year Projections</div>
             </div>
         </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
     
     # Login/Register Section
     st.markdown("---")
+    
+    # Quick info links
+    link_col1, link_col2 = st.columns(2)
+    with link_col1:
+        if st.button("📚 Documentation & User Guide", key="nav_docs", use_container_width=True, type="secondary"):
+            st.query_params['page'] = 'docs'
+            st.rerun()
+    with link_col2:
+        if st.button("ℹ️ About FinSim", key="nav_about", use_container_width=True, type="secondary"):
+            st.query_params['page'] = 'about'
+            st.rerun()
+    
+    st.markdown("<br>", unsafe_allow_html=True)
     
     # Two column layout for login and features
     col_left, col_right = st.columns([1, 1])
@@ -255,8 +251,8 @@ def show_landing_page():
                         else:
                             st.error(message)
             
-            # Demo account info
-            st.info("💡 **Try it out:**\n\nUsername: `testuser`\n\nPassword: `password123`")
+            # # Demo account info
+            # st.info("💡 **Try it out:**\n\nUsername: `testuser`\n\nPassword: `password123`")
         
         with tab2:
             with st.form("register_form"):
@@ -390,35 +386,25 @@ def show_landing_page():
     
     # Footer
     st.markdown("---")
-    
-    # Footer navigation buttons
-    st.markdown("<p style='text-align: center; color: #666;'><strong>FinSim</strong> - Plan Your Financial Future with Confidence</p>", unsafe_allow_html=True)
-    
-    footer_col1, footer_col2, footer_col3, footer_col4 = st.columns(4)
-    with footer_col1:
-        if st.button("About", key="footer_about", use_container_width=True):
-            st.query_params['page'] = 'about'
-            st.rerun()
-    with footer_col2:
-        if st.button("Privacy", key="footer_privacy", use_container_width=True):
-            st.query_params['page'] = 'privacy'
-            st.rerun()
-    with footer_col3:
-        if st.button("Terms", key="footer_terms", use_container_width=True):
-            st.query_params['page'] = 'terms'
-            st.rerun()
-    with footer_col4:
-        if st.button("Contact", key="footer_contact", use_container_width=True):
-            st.query_params['page'] = 'contact'
-            st.rerun()
-    
     st.markdown("""
-        <div style="text-align: center; color: #666; padding: 1rem 0;">
-            <p style="font-size: 0.8rem; opacity: 0.7;">
+        <div style="text-align: center; color: #666; padding: 2rem 0;">
+            <p><strong>FinSim</strong> - Plan Your Financial Future with Confidence</p>
+            <p style="font-size: 0.9rem; margin: 1rem 0;">
                 Educational tool only. Not financial advice. Consult a professional advisor.
+            </p>
+            <p style="font-size: 0.9rem; margin-top: 1.5rem;">
+                <a href="?page=about" style="color: #667eea; text-decoration: none; margin: 0 1rem;">About</a>
+                <a href="?page=privacy" style="color: #667eea; text-decoration: none; margin: 0 1rem;">Privacy</a>
+                <a href="?page=terms" style="color: #667eea; text-decoration: none; margin: 0 1rem;">Terms</a>
+                <a href="?page=contact" style="color: #667eea; text-decoration: none; margin: 0 1rem;">Contact</a>
             </p>
         </div>
     """, unsafe_allow_html=True)
+
+
+# Run the app when executed directly
+if __name__ == "__main__":
+    show_landing_page()
 
 
 
