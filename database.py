@@ -199,7 +199,7 @@ class UsageStats(Base):
         return f"<UsageStats(user_id={self.user_id}, simulations={self.simulations_this_month})>"
 
 class SavedBudget(Base):
-    """Saved budget configurations"""
+    """Saved budget configurations with monthly tracking"""
     __tablename__ = "saved_budgets"
     
     id = Column(Integer, primary_key=True, index=True)
@@ -209,11 +209,18 @@ class SavedBudget(Base):
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     currency = Column(String(10), nullable=True)  # Currency code (EUR, USD, etc.)
+    current_month = Column(String(7), nullable=True)  # Format: "2025-12" for tracking
     
-    # Budget data (JSON)
-    budget_now = Column(JSON, nullable=False)
-    budget_1yr = Column(JSON, nullable=False)
-    budget_5yr = Column(JSON, nullable=False)
+    # Budget data (JSON) - New structure: {category: amount}
+    budget_expected = Column(JSON, nullable=False)  # Expected monthly budget
+    
+    # Monthly actuals (JSON) - New structure: {"2025-12": {category: amount}, "2026-01": {...}}
+    budget_actuals = Column(JSON, nullable=True)  # Actual spending by month
+    
+    # Legacy fields (keep for backwards compatibility, will be NULL for new budgets)
+    budget_now = Column(JSON, nullable=True)
+    budget_1yr = Column(JSON, nullable=True)
+    budget_5yr = Column(JSON, nullable=True)
     
     # Life events
     life_events = Column(JSON, nullable=True)
@@ -409,20 +416,37 @@ def get_age_range(age):
     else:
         return "65+"
 
-def save_budget(user_id, name, budget_now, budget_1yr, budget_5yr, life_events=None, description=None, currency='EUR'):
-    """Save a budget configuration"""
+def save_budget(user_id, name, budget_expected=None, budget_actuals=None, current_month=None, 
+                life_events=None, description=None, currency='EUR',
+                budget_now=None, budget_1yr=None, budget_5yr=None):  # Legacy params for backwards compat
+    """Save a budget configuration (supports new monthly tracking and legacy format)"""
     db = SessionLocal()
     try:
-        budget = SavedBudget(
-            user_id=user_id,
-            name=name,
-            description=description,
-            currency=currency,
-            budget_now=budget_now,
-            budget_1yr=budget_1yr,
-            budget_5yr=budget_5yr,
-            life_events=life_events or []
-        )
+        budget_data = {
+            'user_id': user_id,
+            'name': name,
+            'description': description,
+            'currency': currency,
+            'life_events': life_events or []
+        }
+        
+        # New format - monthly tracking
+        if budget_expected is not None:
+            budget_data['budget_expected'] = budget_expected
+            budget_data['budget_actuals'] = budget_actuals or {}
+            budget_data['current_month'] = current_month or datetime.now().strftime("%Y-%m")
+        # Legacy format - keep for backwards compatibility
+        elif budget_now is not None:
+            budget_data['budget_now'] = budget_now
+            budget_data['budget_1yr'] = budget_1yr
+            budget_data['budget_5yr'] = budget_5yr
+            # Also populate expected field for consistency
+            budget_data['budget_expected'] = budget_now
+            budget_data['budget_actuals'] = {}
+        else:
+            return False, "No budget data provided"
+        
+        budget = SavedBudget(**budget_data)
         db.add(budget)
         db.commit()
         db.refresh(budget)
@@ -448,7 +472,7 @@ def get_user_budgets(user_id, limit=10):
 
 
 def load_budget(user_id, budget_id):
-    """Load a specific budget by ID"""
+    """Load a specific budget by ID (supports both new and legacy formats)"""
     db = SessionLocal()
     try:
         budget = db.query(SavedBudget).filter(
@@ -458,24 +482,36 @@ def load_budget(user_id, budget_id):
         ).first()
         
         if budget:
-            return True, {
+            result = {
                 'id': budget.id,
                 'name': budget.name,
                 'description': budget.description,
-                'currency': budget.currency or 'EUR',  # Default to EUR if not set
-                'budget_now': budget.budget_now,
-                'budget_1yr': budget.budget_1yr,
-                'budget_5yr': budget.budget_5yr,
+                'currency': budget.currency or 'EUR',
                 'life_events': budget.life_events or [],
                 'created_at': budget.created_at.isoformat() if budget.created_at else None
             }
+            
+            # Check if new format (monthly tracking) or legacy format
+            if budget.budget_expected is not None:
+                # New format
+                result['budget_expected'] = budget.budget_expected
+                result['budget_actuals'] = budget.budget_actuals or {}
+                result['current_month'] = budget.current_month
+                result['format'] = 'monthly'
+            else:
+                # Legacy format
+                result['budget_now'] = budget.budget_now
+                result['budget_1yr'] = budget.budget_1yr
+                result['budget_5yr'] = budget.budget_5yr
+                result['format'] = 'legacy'
+            
+            return True, result
         else:
             return False, "Budget not found"
     except Exception as e:
         return False, str(e)
     finally:
         db.close()
-
 
 def get_default_budget(user_id):
     """Get user's default budget"""
