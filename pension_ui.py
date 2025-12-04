@@ -1206,10 +1206,10 @@ def show_sipp_calculator(pension_data, user_id):
             # Simple projection
             years_to_retirement = max(1, pension_data.get('spouse_retirement_age', 67) - pension_data.get('spouse_age', 30))
             spouse_sipp_projected = project_sipp_growth(
-                spouse_sipp_current,
                 spouse_sipp_contribution,
+                years_to_retirement,
                 spouse_sipp_growth / 100,
-                years_to_retirement
+                spouse_sipp_current
             )
             
             st.metric("Projected at Retirement", f"£{spouse_sipp_projected['final_value']:,.0f}")
