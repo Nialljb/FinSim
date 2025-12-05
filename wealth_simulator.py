@@ -1965,7 +1965,7 @@ with tab1:
         is_admin = st.session_state.get('username') in admin_users
         can_simulate, remaining, message = check_simulation_limit(
             st.session_state.user_id, 
-            limit=5,  # Standard users get 5 simulations
+            limit=10,  # Standard users get 10 simulations
             is_admin=is_admin
         )
     else:
