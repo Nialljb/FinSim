@@ -340,9 +340,11 @@ def show_budget_builder():
                         )
                         
                         if success:
+                            st.toast(f"✅ Budget saved: {save_budget_name}", icon="✅")
                             st.success(f"✅ Saved as: {save_budget_name} ({current_currency})")
                             st.rerun()  # Refresh to show new budget in load list
                         else:
+                            st.toast(f"❌ Save failed: {result}", icon="❌")
                             st.error(f"❌ Error: {result}")
                 else:
                     st.info("Create a budget first to save it")
