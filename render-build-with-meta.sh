@@ -4,6 +4,9 @@ set -e
 echo "Installing Python packages..."
 pip install -r requirements.txt
 
+echo "Running database migrations..."
+python migrate_postgres_budget_columns.py
+
 echo "Modifying Streamlit to inject custom meta tags..."
 
 # Find Streamlit's index.html template
