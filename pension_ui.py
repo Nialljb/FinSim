@@ -491,13 +491,15 @@ def show_state_pension_calculator(pension_data, user_id):
             col_a, col_b = st.columns(2)
             
             with col_a:
+                # Load saved value, default to 0
+                saved_spouse_ni = pension_data.get('spouse_state_pension_ni_years', 0)
                 spouse_ni_years = st.number_input(
                     "Spouse Current NI Years",
                     min_value=0,
                     max_value=50,
-                    value=pension_data.get('spouse_state_pension_ni_years', 0),
+                    value=saved_spouse_ni,
                     key="spouse_ni_years",
-                    help="Spouse's NI qualifying years"
+                    help=f"Spouse's NI qualifying years (saved: {saved_spouse_ni})"
                 )
             
             with col_b:
@@ -610,6 +612,7 @@ def show_state_pension_calculator(pension_data, user_id):
                 'spouse_age': spouse_current_age
             })
             save_pension_plan(pension_data, user_id)
+            st.toast("✅ Spouse State Pension data saved!", icon="✅")
             st.success("✅ Spouse State Pension data saved!")
             st.rerun()
 
