@@ -42,10 +42,40 @@ initialize_currency_system()
 
 # Set page config - ONCE at the top
 st.set_page_config(
-    page_title="FinSim - Financial Simulator",
-    page_icon="🐬",
+    page_title="FinSTK - Financial Simulation Toolkit",
+    page_icon="assets/favicon.png",
     layout="wide",
+    menu_items={
+        'Get Help': 'https://finstk.com/docs',
+        'Report a bug': 'mailto:support@finstk.com',
+        'About': """
+        # FinSTK - Financial Simulation Toolkit
+        
+        Plan your financial future with Monte Carlo simulations, retirement planning, 
+        real estate modeling, and life event forecasting.
+        
+        **BETA Version** - For Educational Purposes Only
+        """
+    },
+    initial_sidebar_state="expanded"
 )
+
+# Add meta tags for social media preview
+st.markdown("""
+    <meta property="og:title" content="FinSTK - Financial Simulation Toolkit" />
+    <meta property="og:description" content="Plan your financial future with Monte Carlo simulations, retirement planning, real estate modeling, and life event forecasting." />
+    <meta property="og:image" content="https://finstk.com/assets/preview.png" />
+    <meta property="og:url" content="https://finstk.com" />
+    <meta property="og:type" content="website" />
+    
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="FinSTK - Financial Simulation Toolkit" />
+    <meta name="twitter:description" content="Plan your financial future with Monte Carlo simulations, retirement planning, real estate modeling, and life event forecasting." />
+    <meta name="twitter:image" content="https://finstk.com/assets/preview.png" />
+    
+    <meta name="description" content="Free financial planning tool with Monte Carlo simulations. Model your retirement, property investments, and life events with professional-grade forecasting." />
+    <meta name="keywords" content="financial planning, Monte Carlo simulation, retirement planning, wealth simulator, investment calculator" />
+""", unsafe_allow_html=True)
 
 # Initialize database on first run
 try:
