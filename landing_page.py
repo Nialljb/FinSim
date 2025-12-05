@@ -177,10 +177,13 @@ def show_landing_page():
     # Hero Section
     st.markdown("""
         <div class="hero">
-            <h1>🐬 FinSim</h1>
-            <p>Plan Your Financial Future with Confidence</p>
+            <h1>🐬 FinSTK</h1>
+            <p>Plan Your Financial Future with The Financial Simulation Toolkit</p>
             <p style="font-size: 1rem; opacity: 0.9;">
                 Monte Carlo simulations • Retirement planning • Real estate modeling • Life event forecasting
+            </p>
+            <p style="font-size: 1rem; opacity: 0.9;">
+                BETA Version - For Educational Purposes Only
             </p>
         </div>
     """, unsafe_allow_html=True)

@@ -42,7 +42,7 @@ initialize_currency_system()
 
 # Set page config - ONCE at the top
 st.set_page_config(
-    page_title="FinSim - Financial Planning",
+    page_title="FinSim - Financial Simulator",
     page_icon="🐬",
     layout="wide",
 )
