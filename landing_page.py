@@ -183,7 +183,7 @@ def show_landing_page():
                 Monte Carlo simulations • Retirement planning • Real estate modeling • Life event forecasting
             </p>
             <p style="font-size: 1rem; opacity: 0.9;">
-                BETA Version - For Educational Purposes Only
+                *BETA Version - For Educational Purposes Only  • Some Features May Be Incomplete Or Subject To Change*
             </p>
         </div>
     """, unsafe_allow_html=True)
