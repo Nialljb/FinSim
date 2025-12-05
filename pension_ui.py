@@ -262,7 +262,12 @@ def show_state_pension_calculator(pension_data, user_id):
         if current_dob:
             dob = datetime.strptime(current_dob, '%Y-%m-%d').date()
         else:
-            dob = date(1980, 1, 1)
+            # Use user's current age if available from session state
+            user_age = st.session_state.get('current_age')
+            if user_age:
+                dob = date.today() - relativedelta(years=user_age)
+            else:
+                dob = date(1990, 1, 1)  # Default to someone currently 35
         
         date_of_birth = st.date_input(
             "Date of Birth",
@@ -300,7 +305,18 @@ def show_state_pension_calculator(pension_data, user_id):
         
         # Project future years
         if employment_status in ["Employed", "Self-Employed"]:
-            projected_future_years = years_to_pension
+            # Only auto-calculate if user already has some NI years recorded
+            # Otherwise, encourage them to check their actual NI record first
+            if ni_years > 0:
+                projected_future_years = years_to_pension
+            else:
+                projected_future_years = st.number_input(
+                    "Expected future qualifying years",
+                    min_value=0,
+                    max_value=years_to_pension,
+                    value=0,
+                    help="Check your actual NI record at gov.uk before projecting. This field estimates how many years you expect to continue contributing."
+                )
         elif employment_status == "Unemployed (claiming credits)":
             projected_future_years = int(years_to_pension * 0.8)  # May get some credits
         else:
@@ -1416,9 +1432,12 @@ def load_pension_plan(user_id):
                 'current_age': (date.today() - datetime.strptime(plan.date_of_birth, '%Y-%m-%d').date()).days // 365 if plan.date_of_birth else None
             }
         else:
-            # Return empty plan
+            # Return empty plan with proper defaults
             return {
                 'state_pension_enabled': False,
+                'state_pension_ni_years': 0,
+                'state_pension_projected_years': 0,
+                'state_pension_annual_amount': 0.0,
                 'uss_enabled': False,
                 'uss_avc_enabled': False,
                 'uss_avc_annual_amount': 0,
@@ -1430,7 +1449,8 @@ def load_pension_plan(user_id):
                 'simulation_end_age': 87,
                 'salary_growth_rate': 0.02,
                 'sipp_growth_rate': 0.05,
-                'drawdown_rate': 0.04
+                'drawdown_rate': 0.04,
+                'date_of_birth': None
             }
     finally:
         db.close()
