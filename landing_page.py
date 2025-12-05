@@ -3,7 +3,7 @@ Professional Landing Page for FinSim with integrated static pages
 """
 
 import streamlit as st
-from auth import initialize_session_state, login_user, register_user, logout
+from auth import initialize_session_state, login_user, register_user, logout, request_password_reset
 
 
 def show_about_page():
@@ -228,7 +228,7 @@ def show_landing_page():
     with col_left:
         st.markdown("### 🔐 Get Started")
         
-        tab1, tab2 = st.tabs(["Login", "Create Account"])
+        tab1, tab2, tab3 = st.tabs(["Login", "Create Account", "Forgot Password"])
         
         with tab1:
             with st.form("login_form"):
@@ -254,8 +254,7 @@ def show_landing_page():
                         else:
                             st.error(message)
             
-            # # Demo account info
-            # st.info("💡 **Try it out:**\n\nUsername: `testuser`\n\nPassword: `password123`")
+            st.caption("Forgot your password? Use the 'Forgot Password' tab or contact niall@finstk.com")
         
         with tab2:
             with st.form("register_form"):
@@ -316,6 +315,32 @@ def show_landing_page():
                             st.info("👉 Switch to Login tab to sign in")
                         else:
                             st.error(message)
+        
+        with tab3:
+            st.markdown("### 🔑 Password Recovery")
+            st.markdown("Enter your email address to recover your username. For password resets, contact niall@finstk.com")
+            
+            with st.form("password_recovery_form"):
+                recovery_email = st.text_input("Email Address", key="recovery_email", placeholder="your.email@example.com")
+                submit_recovery = st.form_submit_button("Recover Username", type="primary", use_container_width=True)
+                
+                if submit_recovery:
+                    if not recovery_email:
+                        st.error("Please enter your email address")
+                    else:
+                        success, result = request_password_reset(recovery_email)
+                        if success:
+                            if "Account found" in result:
+                                st.success(result)
+                                st.info("If you've forgotten your password, please contact niall@finstk.com with your username.")
+                            else:
+                                st.info(result)
+                        else:
+                            st.error(result)
+            
+            st.markdown("---")
+            st.markdown("**Need help?**")
+            st.markdown("Contact us at **niall@finstk.com** for password resets and account assistance.")
     
     with col_right:
         st.markdown("### ✨ Key Features")
