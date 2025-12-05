@@ -3,34 +3,34 @@
 ## Problem
 PDF export works locally but shows "⚠️ PDF unavailable - use Excel export" when deployed on Render.
 
-## Root Cause
-The PDF export requires **Kaleido** to convert Plotly charts to images. Older Kaleido versions had known issues in containerized environments.
+## Root Cause & Solution
 
-## Current Solution (Updated December 2024)
+### Kaleido Version Compatibility Issue
 
-**Kaleido Version**: `kaleido==1.2.0` 
+**Problem**: Kaleido has two incompatible major versions:
+- **v0.2.x**: Bundles Chrome binaries (self-contained, works in containers)
+- **v1.x+**: Requires external Chrome installation (fails in read-only filesystems)
 
-### Key Benefits of Kaleido 1.2.0
-- ✅ **No system dependencies required** - bundles its own Chrome binaries
-- ✅ **Addresses CVE vulnerabilities** from 0.2.1.post1
-- ✅ **Works in read-only filesystems** - pure Python package
-- ✅ **Simpler deployment** - no apt-get needed
+**Current Solution**: Using `kaleido==0.2.1`
 
-### Testing & Compatibility
-- ✅ Local tests pass (test_pdf_export.py)
-- ✅ Plotly chart conversion working (PNG, JPG, SVG formats)
-- ✅ ReportLab PDF generation working
-- ✅ wealth_simulator.py PDF_EXPORT_AVAILABLE check passes
+### Why Not Kaleido 1.x?
 
-### Deployment
-The `render-build.sh` script is now simplified - just installs Python packages:
+Kaleido 1.0+ introduced breaking changes:
+- No longer bundles Chrome binaries
+- Requires system Chrome to be installed separately
+- Would need apt-get in build script (causes read-only filesystem errors on Render)
+- Per Kaleido docs: "Chrome is no longer included with Kaleido"
+
+### Deployment Configuration
+
+The `render-build.sh` script is simple - just installs Python packages:
 
 ```bash
 #!/bin/bash
 pip install -r requirements.txt
 ```
 
-**No system dependencies needed** - Kaleido 1.2.0 is self-contained!
+**No system dependencies needed** - Kaleido 0.2.1 is self-contained with bundled Chrome!
 
 ### Option 2: Install System Dependencies on Render
 Add a `render-build.sh` script to install required system packages:
