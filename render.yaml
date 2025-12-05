@@ -7,7 +7,7 @@ services:
     name: finsim-app
     env: python
     runtime: python
-    plan: free #starter  # $7/month (or use 'free' for testing with auto-sleep)
+    plan: starter  # $7/month (or use 'free' for testing with auto-sleep)
     buildCommand: ./render-build-with-meta.sh
     startCommand: streamlit run wealth_simulator.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true
     envVars:

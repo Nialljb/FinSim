@@ -509,7 +509,17 @@ def show_state_pension_calculator(pension_data, user_id):
                 )
             
             # Project spouse future years
-            if spouse_employment_status in ["Employed", "Self-Employed"]:
+            # If spouse has 0 NI years, require manual input regardless of employment status
+            if spouse_ni_years == 0:
+                spouse_projected_future_years = st.number_input(
+                    "Spouse Expected Future Qualifying Years",
+                    min_value=0,
+                    max_value=spouse_years_to_pension,
+                    value=0,
+                    key="spouse_projected_years",
+                    help="Years spouse expects to contribute NI (0 NI years detected - please specify manually)"
+                )
+            elif spouse_employment_status in ["Employed", "Self-Employed"]:
                 spouse_projected_future_years = spouse_years_to_pension
             elif spouse_employment_status == "Unemployed (claiming credits)":
                 spouse_projected_future_years = int(spouse_years_to_pension * 0.8)

@@ -225,6 +225,9 @@ class SavedBudget(Base):
     
     # Legacy fields (keep for backwards compatibility, will be NULL for new budgets)
     budget_now = Column(JSON, nullable=True)
+    budget_min = Column(JSON, nullable=True)  # Minimum budget scenario
+    budget_max = Column(JSON, nullable=True)  # Maximum budget scenario
+    budget_target = Column(JSON, nullable=True)  # Target budget
     budget_1yr = Column(JSON, nullable=True)
     budget_5yr = Column(JSON, nullable=True)
     
@@ -472,6 +475,11 @@ def save_budget(user_id, name, budget_expected=None, budget_actuals=None, curren
             budget_data['budget_expected'] = budget_expected
             budget_data['budget_actuals'] = budget_actuals or {}
             budget_data['current_month'] = current_month or datetime.now().strftime("%Y-%m")
+            # Provide empty dicts for legacy fields to satisfy NOT NULL constraints
+            budget_data['budget_now'] = budget_expected  # Use expected as baseline
+            budget_data['budget_min'] = {}  # Empty - not used in new format
+            budget_data['budget_max'] = {}  # Empty - not used in new format  
+            budget_data['budget_target'] = {}  # Empty - not used in new format
         # Legacy format - keep for backwards compatibility
         elif budget_now is not None:
             budget_data['budget_now'] = budget_now
@@ -480,6 +488,10 @@ def save_budget(user_id, name, budget_expected=None, budget_actuals=None, curren
             # Also populate expected field for consistency
             budget_data['budget_expected'] = budget_now
             budget_data['budget_actuals'] = {}
+            # Provide defaults for missing legacy fields
+            budget_data['budget_min'] = budget_data.get('budget_min', {})
+            budget_data['budget_max'] = budget_data.get('budget_max', {})
+            budget_data['budget_target'] = budget_data.get('budget_target', {})
         else:
             return False, "No budget data provided"
         
