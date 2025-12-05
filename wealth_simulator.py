@@ -60,34 +60,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Add meta tags for social media preview
-# Note: Streamlit apps need to use external image hosting or GitHub raw URLs for social previews
-# The assets folder is not publicly accessible by default in Streamlit Cloud/Render
-import base64
-import os
-
-# Get the absolute URL for preview image
-# For production, host preview.png on a CDN or use GitHub raw URL
-PREVIEW_IMAGE_URL = "https://raw.githubusercontent.com/Nialljb/FinSim/design/assets/preview.png"
-SITE_URL = os.getenv("SITE_URL", "https://finstk.com")  # Set SITE_URL env var in Render
-
-st.markdown(f"""
-    <meta property="og:title" content="FinSTK - Financial Simulation Toolkit" />
-    <meta property="og:description" content="Plan your financial future with Monte Carlo simulations, retirement planning, real estate modeling, and life event forecasting." />
-    <meta property="og:image" content="{PREVIEW_IMAGE_URL}" />
-    <meta property="og:url" content="{SITE_URL}" />
-    <meta property="og:type" content="website" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="FinSTK - Financial Simulation Toolkit" />
-    <meta name="twitter:description" content="Plan your financial future with Monte Carlo simulations, retirement planning, real estate modeling, and life event forecasting." />
-    <meta name="twitter:image" content="{PREVIEW_IMAGE_URL}" />
-    
-    <meta name="description" content="Free financial planning tool with Monte Carlo simulations. Model your retirement, property investments, and life events with professional-grade forecasting." />
-    <meta name="keywords" content="financial planning, Monte Carlo simulation, retirement planning, wealth simulator, investment calculator" />
-""", unsafe_allow_html=True)
+# Note: Streamlit does not support custom meta tags in <head>
+# Social media link previews cannot be customized in pure Streamlit apps
+# Workarounds require reverse proxy or custom hosting (not available on Render/Streamlit Cloud)
 
 # Initialize database on first run
 try:
