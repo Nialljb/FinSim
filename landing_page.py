@@ -399,16 +399,16 @@ def show_landing_page():
     with col1:
         st.markdown("""
         <div class="testimonial">
-            "FinSim helped me understand Monte Carlo simulations"
-            <div class="testimonial-author">— Niall, 34, FinSim Developer</div>
+            "FinSTK helped me understand Monte Carlo simulations"
+            <div class="testimonial-author">— Niall, FinSTK Developer</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col2:
         st.markdown("""
         <div class="testimonial">
-            "Hmmm."
-            <div class="testimonial-author">— Helen, 30, Data Wizard</div>
+            "An amazing tool for financial planning!"
+            <div class="testimonial-author">— Helen, Data Scientist</div>
         </div>
         """, unsafe_allow_html=True)
     
