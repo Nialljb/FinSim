@@ -7,16 +7,24 @@ PDF export works locally but shows "⚠️ PDF unavailable - use Excel export" w
 The PDF export requires **Kaleido** to convert Plotly charts to images. Kaleido has known issues in containerized environments like Render because:
 
 1. **Missing system dependencies**: Kaleido needs Chrome/Chromium libraries
-2. **Outdated version**: Using Kaleido 0.2.1 which has compatibility issues
-3. **Limited support**: Kaleido development has slowed, leading to deployment problems
+2. **Security vulnerabilities**: Older Kaleido versions contain known CVEs
+3. **Compatibility**: Requires specific system libraries in containerized environments
 
-## Solution Options
+## Current Solution (Updated December 2024)
 
-### Option 1: Use Plotly's Built-in Kaleido (Recommended)
-Update requirements.txt to use the latest Kaleido version with better compatibility:
+**Kaleido Version**: `kaleido==1.2.0` (upgraded from 0.2.1.post1 to address CVE vulnerabilities)
+
+### Testing & Compatibility
+- ✅ Local tests pass (test_pdf_export.py)
+- ✅ Plotly chart conversion working (PNG, JPG, SVG formats)
+- ✅ ReportLab PDF generation working
+- ✅ wealth_simulator.py PDF_EXPORT_AVAILABLE check passes
+
+### System Dependencies
+The `render-build.sh` script installs required Chrome/Chromium libraries:
 
 ```txt
-kaleido==0.2.1.post1
+kaleido==1.2.0
 ```
 
 ### Option 2: Install System Dependencies on Render
