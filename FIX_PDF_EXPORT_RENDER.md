@@ -4,15 +4,17 @@
 PDF export works locally but shows "⚠️ PDF unavailable - use Excel export" when deployed on Render.
 
 ## Root Cause
-The PDF export requires **Kaleido** to convert Plotly charts to images. Kaleido has known issues in containerized environments like Render because:
-
-1. **Missing system dependencies**: Kaleido needs Chrome/Chromium libraries
-2. **Security vulnerabilities**: Older Kaleido versions contain known CVEs
-3. **Compatibility**: Requires specific system libraries in containerized environments
+The PDF export requires **Kaleido** to convert Plotly charts to images. Older Kaleido versions had known issues in containerized environments.
 
 ## Current Solution (Updated December 2024)
 
-**Kaleido Version**: `kaleido==1.2.0` (upgraded from 0.2.1.post1 to address CVE vulnerabilities)
+**Kaleido Version**: `kaleido==1.2.0` 
+
+### Key Benefits of Kaleido 1.2.0
+- ✅ **No system dependencies required** - bundles its own Chrome binaries
+- ✅ **Addresses CVE vulnerabilities** from 0.2.1.post1
+- ✅ **Works in read-only filesystems** - pure Python package
+- ✅ **Simpler deployment** - no apt-get needed
 
 ### Testing & Compatibility
 - ✅ Local tests pass (test_pdf_export.py)
@@ -20,12 +22,15 @@ The PDF export requires **Kaleido** to convert Plotly charts to images. Kaleido 
 - ✅ ReportLab PDF generation working
 - ✅ wealth_simulator.py PDF_EXPORT_AVAILABLE check passes
 
-### System Dependencies
-The `render-build.sh` script installs required Chrome/Chromium libraries:
+### Deployment
+The `render-build.sh` script is now simplified - just installs Python packages:
 
-```txt
-kaleido==1.2.0
+```bash
+#!/bin/bash
+pip install -r requirements.txt
 ```
+
+**No system dependencies needed** - Kaleido 1.2.0 is self-contained!
 
 ### Option 2: Install System Dependencies on Render
 Add a `render-build.sh` script to install required system packages:

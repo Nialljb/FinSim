@@ -65,15 +65,21 @@ Testing ReportLab PDF Generation:
 ## Deployment Considerations
 
 ### System Dependencies (Render)
-The existing `render-build.sh` script installs Chrome/Chromium libraries required by Kaleido. These dependencies remain compatible with version 1.2.0:
+**IMPORTANT**: Kaleido 1.2.0 is a self-contained package that bundles its own Chrome binaries. Unlike version 0.2.1.post1:
 
-- libx11-6, libx11-xcb1, libxcomposite1
-- libxcursor1, libxdamage1, libxext6
-- libxfixes3, libxi6, libxrandr2
-- libnss3, libnspr4, libgtk-3-0
-- libpangocairo-1.0-0, etc.
+- ✅ **No apt-get commands needed**
+- ✅ **No system libraries required**
+- ✅ **Works in read-only filesystems**
+- ✅ **Pure Python package**
 
-**Status**: ✅ No changes required to render-build.sh
+The `render-build.sh` script has been simplified to only install Python packages:
+
+```bash
+#!/bin/bash
+pip install -r requirements.txt
+```
+
+**Status**: ✅ Simplified build process (removed all apt-get dependencies)
 
 ### Virtual Environment
 Kaleido 1.2.0 successfully installed in Python 3.13.6 virtual environment with all dependencies:
