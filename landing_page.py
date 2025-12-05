@@ -408,7 +408,7 @@ def show_landing_page():
         st.markdown("""
         <div class="testimonial">
             "An amazing tool for financial planning!"
-            <div class="testimonial-author">— Helen, 30, Data Scientist</div>
+            <div class="testimonial-author">— Helen, Data Scientist</div>
         </div>
         """, unsafe_allow_html=True)
     
