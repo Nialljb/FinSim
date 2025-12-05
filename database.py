@@ -480,6 +480,8 @@ def save_budget(user_id, name, budget_expected=None, budget_actuals=None, curren
             budget_data['budget_min'] = {}  # Empty - not used in new format
             budget_data['budget_max'] = {}  # Empty - not used in new format  
             budget_data['budget_target'] = {}  # Empty - not used in new format
+            budget_data['budget_1yr'] = {}  # Empty - not used in new format
+            budget_data['budget_5yr'] = {}  # Empty - not used in new format
         # Legacy format - keep for backwards compatibility
         elif budget_now is not None:
             budget_data['budget_now'] = budget_now
