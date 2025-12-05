@@ -5,8 +5,9 @@ echo "================================================"
 echo "Installing Python dependencies..."
 echo "================================================"
 
-# Note: Kaleido 1.2.0+ bundles its own Chrome binaries
-# No system dependencies required (pure Python package)
+# Note: Kaleido 0.2.1.post1 bundles Chrome binaries
+# No system dependencies required for this version
+# (Kaleido 1.x+ would require external Chrome installation)
 pip install -r requirements.txt
 
 echo "✅ Python packages installed successfully"
