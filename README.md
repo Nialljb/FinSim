@@ -1,6 +1,37 @@
-# Monte Carlo Wealth Simulator
+# FinSim - Financial Simulation Toolkit
+
+> **Version 2.0** - Refactored Architecture (December 2025)
 
 An interactive Monte Carlo financial planning tool built with Streamlit that helps you visualize and analyze your financial future over a 30-year horizon.
+
+**🎯 For Educational Purposes Only - Not Financial Advice**
+
+## 🆕 What's New in v2.0
+
+- ✅ **Clean Architecture** - Modular structure with clear separation of concerns
+- ✅ **Modern Codebase** - Following Python and Streamlit best practices  
+- ✅ **Improved Maintainability** - Organized into app/, services/, config/, lib/
+- ✅ **Better Testing** - Test structure and reusable utilities ready
+- ✅ **Comprehensive Docs** - Complete documentation for users and developers
+- ✅ **Zero Breaking Changes** - All existing functionality preserved
+
+See [`REFACTORING_COMPLETE.md`](REFACTORING_COMPLETE.md) for full details.
+
+## 🚀 Quick Start
+
+```bash
+# Clone the repository
+git clone https://github.com/Nialljb/FinSim.git
+cd FinSim
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the application
+streamlit run wealth_simulator.py
+```
+
+**That's it!** Open your browser to http://localhost:8501
 
 ## ✨ Features
 

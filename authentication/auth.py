@@ -9,7 +9,13 @@ from datetime import datetime, timedelta
 from database import SessionLocal, User, UsageStats, Feedback, EmailVerification
 import hashlib
 import secrets
-from email_service import generate_verification_token, send_verification_email, send_welcome_email
+
+# Import from services directory
+try:
+    from services.email_service import generate_verification_token, send_verification_email, send_welcome_email
+except ImportError:
+    # Fallback to root import during transition
+    from email_service import generate_verification_token, send_verification_email, send_welcome_email
 
 
 def hash_password(password: str) -> str:
