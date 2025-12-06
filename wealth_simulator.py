@@ -24,6 +24,11 @@ from services.visualization import (
     create_distribution_chart,
     get_view_type_paths
 )
+from services.cash_flow import (
+    build_cashflow_projection,
+    create_year1_breakdown,
+    calculate_year_passive_income
+)
 
 # ADD THESE LINES after the existing currency_converter import:
 
@@ -2108,67 +2113,56 @@ with tab1:
         
         with col1:
             st.markdown("**Year 1 Cash Flow Breakdown**")
-            year1_income = gross_annual_income
-            year1_pension = year1_income * pension_contribution_rate
-            year1_tax = year1_income * effective_tax_rate
-            year1_takehome = year1_income - year1_pension - year1_tax
             
             # Calculate passive income for Year 1
             year1_passive_income = 0
             if st.session_state.get('authenticated', False):
                 from database import get_user_passive_income_streams
-                passive_streams = get_user_passive_income_streams(st.session_state.user_id)
                 
-                for stream in passive_streams:
-                    if stream.start_year <= 1 and (stream.end_year is None or 1 <= stream.end_year):
-                        years_active = 1 - stream.start_year
-                        growth_factor = (1 + stream.annual_growth_rate) ** years_active
-                        stream_annual_amount = from_base_currency(stream.monthly_amount * 12 * growth_factor, selected_currency)
-                        
-                        if stream.is_taxable:
-                            tax_rate = stream.tax_rate if stream.tax_rate is not None else effective_tax_rate
-                            stream_annual_amount *= (1 - tax_rate)
-                        
-                        year1_passive_income += stream_annual_amount
+                # Create passive stream class wrapper for service
+                class PassiveStream:
+                    def __init__(self, stream_data):
+                        self.start_year = stream_data.start_year
+                        self.end_year = stream_data.end_year
+                        self.monthly_amount = from_base_currency(stream_data.monthly_amount, selected_currency)
+                        self.annual_growth_rate = stream_data.annual_growth_rate
+                        self.is_taxable = stream_data.is_taxable
+                        self.tax_rate = stream_data.tax_rate
+                
+                passive_streams_data = get_user_passive_income_streams(st.session_state.user_id)
+                passive_streams = [PassiveStream(s) for s in passive_streams_data]
+                year1_passive_income = calculate_year_passive_income(
+                    year=1,
+                    passive_streams=passive_streams,
+                    effective_tax_rate=effective_tax_rate
+                )
             
-            year1_expenses = monthly_expenses * 12
-            year1_mortgage = st.session_state.get('monthly_mortgage_payment', 0) * 12
-            year1_available = year1_takehome + year1_passive_income - year1_expenses - year1_mortgage
+            # Create Year 1 breakdown using service
+            currency_formatter = lambda x: format_currency(x, selected_currency)
+            cashflow_df, year1_available, status = create_year1_breakdown(
+                gross_annual_income=gross_annual_income,
+                pension_contribution_rate=pension_contribution_rate,
+                effective_tax_rate=effective_tax_rate,
+                monthly_expenses=monthly_expenses,
+                monthly_mortgage=st.session_state.get('monthly_mortgage_payment', 0),
+                passive_income_annual=year1_passive_income,
+                currency_formatter=currency_formatter
+            )
             
-            cashflow_items = [
-                'Gross Income', '- Pension Contrib', '- Tax', '= Take Home'
-            ]
-            cashflow_amounts = [
-                format_currency(year1_income, selected_currency),
-                format_currency(year1_pension, selected_currency),
-                format_currency(year1_tax, selected_currency),
-                format_currency(year1_takehome, selected_currency)
-            ]
-            
-            if year1_passive_income > 0:
-                cashflow_items.append('+ Passive Income')
-                cashflow_amounts.append(format_currency(year1_passive_income, selected_currency))
-            
-            cashflow_items.extend(['- Living Expenses', '- Mortgage', '= Available for Investment'])
-            cashflow_amounts.extend([
-                format_currency(year1_expenses, selected_currency),
-                format_currency(year1_mortgage, selected_currency),
-                format_currency(year1_available, selected_currency)
-            ])
-            
-            cashflow_df = pd.DataFrame({
-                'Item': cashflow_items,
-                'Amount': cashflow_amounts
-            })
             st.dataframe(cashflow_df, use_container_width=True, hide_index=True)
             
-            if year1_available < 0:
+            if status == 'deficit':
                 st.error(f"⚠️ Cash flow deficit: {format_currency(abs(year1_available), selected_currency)}/year")
             else:
                 st.success(f"✓ Annual savings: {format_currency(year1_available, selected_currency)} ({format_currency(year1_available/12, selected_currency)}/month)")
         
         with col2:
             st.markdown("**Key Metrics**")
+            year1_income = gross_annual_income
+            year1_pension = year1_income * pension_contribution_rate
+            year1_tax = year1_income * effective_tax_rate
+            take_home = year1_income - year1_pension - year1_tax
+            
             st.metric(
                 "Year 1 Net Income",
                 format_currency(take_home, selected_currency),
@@ -2224,130 +2218,78 @@ with tab1:
         st.markdown("---")
         st.subheader("Cash Flow Projection with Financial Events")
         
-        # Build year-by-year cash flow projection
-        # First 10 years: every year, then 5-year intervals
-        max_projection_year = min(simulation_years, 30)
-        projection_years = list(range(0, min(11, max_projection_year + 1)))
-        if max_projection_year > 10:
-            projection_years += [y for y in [15, 20, 25, 30] if y <= max_projection_year]
+        # Prepare passive income streams for service
+        passive_streams_for_projection = None
+        if st.session_state.get('authenticated', False):
+            from database import get_user_passive_income_streams
+            
+            # Create passive stream class wrapper for service
+            class PassiveStream:
+                def __init__(self, stream_data):
+                    self.start_year = stream_data.start_year
+                    self.end_year = stream_data.end_year
+                    self.monthly_amount = from_base_currency(stream_data.monthly_amount, selected_currency)
+                    self.annual_growth_rate = stream_data.annual_growth_rate
+                    self.is_taxable = stream_data.is_taxable
+                    self.tax_rate = stream_data.tax_rate
+            
+            passive_streams_data = get_user_passive_income_streams(st.session_state.user_id)
+            passive_streams_for_projection = [PassiveStream(s) for s in passive_streams_data]
         
-        cashflow_projection = []
+        # Convert events from base to display currency
+        display_events = convert_events_from_base(base_events, selected_currency)
         
-        for year in projection_years:
-            # Apply all events up to this year
-            year_monthly_expenses = monthly_expenses
-            year_monthly_mortgage = calculated_payment
-            year_monthly_rental = 0
-            year_passive_income_annual = 0
-            event_notes = []
-            
-            # Calculate passive income for this year
-            if st.session_state.get('authenticated', False):
-                from database import get_user_passive_income_streams
-                passive_streams = get_user_passive_income_streams(st.session_state.user_id)
-                
-                for stream in passive_streams:
-                    if stream.start_year <= year and (stream.end_year is None or year <= stream.end_year):
-                        years_active = year - stream.start_year
-                        growth_factor = (1 + stream.annual_growth_rate) ** years_active
-                        stream_annual_amount = from_base_currency(stream.monthly_amount * 12 * growth_factor, selected_currency)
-                        
-                        # Apply tax if applicable
-                        if stream.is_taxable:
-                            tax_rate = stream.tax_rate if stream.tax_rate is not None else effective_tax_rate
-                            stream_annual_amount *= (1 - tax_rate)
-                        
-                        year_passive_income_annual += stream_annual_amount
-            
-            # Convert events from base to display currency for this calculation
-            display_events = convert_events_from_base(base_events, selected_currency)
-            
-            for event in display_events:
-                if event['year'] <= year:
-                    if event['type'] == 'property_purchase':
-                        year_monthly_mortgage = event['new_mortgage_payment']
-                        if event['year'] == year:
-                            event_notes.append(f"🏠 {event['name']}")
-                    elif event['type'] == 'property_sale':
-                        year_monthly_mortgage = 0
-                        if event['year'] == year:
-                            event_notes.append(f"💰 {event['name']}")
-                    elif event['type'] == 'expense_change':
-                        year_monthly_expenses += event['monthly_change']
-                        if event['year'] == year:
-                            event_notes.append(f"📊 {event['name']}")
-                    elif event['type'] == 'rental_income':
-                        year_monthly_rental += event['monthly_rental']
-                        if event['year'] == year:
-                            event_notes.append(f"🏘️ {event['name']}")
-                    elif event['type'] == 'one_time_expense' and event['year'] == year:
-                        event_notes.append(f"💸 {event['name']}")
-                    elif event['type'] == 'windfall' and event['year'] == year:
-                        event_notes.append(f"💵 {event['name']}")
-            
-            # Calculate cash flow (with salary inflation)
-            cumulative_salary_growth = (1 + salary_inflation) ** year
-            current_age_projection = starting_age + year
-            is_retired_projection = current_age_projection > retirement_age
-            
-            # Primary income
-            if not is_retired_projection:
-                year_income = gross_annual_income * cumulative_salary_growth
-                year_pension = year_income * pension_contribution_rate
-                year_tax = year_income * effective_tax_rate
-                year_takehome = year_income - year_pension - year_tax
-            else:
-                # Use pension income from pension planner if available
-                if use_pension_data:
-                    year_takehome = total_pension_income
-                else:
-                    year_takehome = 0
-                year_pension = 0
-                year_tax = 0
-            
-            # Spouse income (if enabled)
-            spouse_takehome = 0
-            if include_spouse and spouse_annual_income > 0:
-                spouse_current_age = spouse_age + year
-                spouse_is_retired_projection = spouse_current_age > spouse_retirement_age
-                
-                if not spouse_is_retired_projection:
-                    spouse_income = spouse_annual_income * cumulative_salary_growth
-                    spouse_pension = spouse_income * pension_contribution_rate
-                    spouse_tax = spouse_income * effective_tax_rate
-                    spouse_takehome = spouse_income - spouse_pension - spouse_tax
-                # Note: spouse pension income will be added when pension planner is integrated
-            
-            # Total household income
-            total_household_takehome = year_takehome + spouse_takehome
-            year_rental_annual = year_monthly_rental * 12
-            year_expenses_annual = year_monthly_expenses * 12
-            year_mortgage_annual = year_monthly_mortgage * 12
-            year_available = total_household_takehome + year_rental_annual + year_passive_income_annual - year_expenses_annual - year_mortgage_annual
-            
-            projection_row = {
-                'Year': year,
-                'Age': starting_age + year,
-                'Take Home': format_currency(year_takehome, selected_currency),
+        # Prepare spouse parameters
+        spouse_params = None
+        if include_spouse and spouse_annual_income > 0:
+            spouse_params = {
+                'gross_income': spouse_annual_income,
+                'retirement_age': spouse_retirement_age,
+                'tax_rate': effective_tax_rate,  # Using same tax rate for simplicity
+                'pension_rate': pension_contribution_rate,
+                'pension_income': 0  # TODO: Add spouse pension income from planner
             }
-            
-            # Add spouse income column if enabled
-            if include_spouse:
-                projection_row['Spouse Income'] = format_currency(spouse_takehome, selected_currency) if spouse_takehome > 0 else "-"
-            
-            projection_row.update({
-                'Rental Income': format_currency(year_rental_annual, selected_currency) if year_rental_annual > 0 else "-",
-                'Passive Income': format_currency(year_passive_income_annual, selected_currency) if year_passive_income_annual > 0 else "-",
-                'Living Expenses': format_currency(year_expenses_annual, selected_currency),
-                'Mortgage': format_currency(year_mortgage_annual, selected_currency) if year_mortgage_annual > 0 else "-",
-                'Available Savings': format_currency(year_available, selected_currency),
-                'Monthly Savings': format_currency(year_available/12, selected_currency),
-                'Events This Year': ', '.join(event_notes) if event_notes else '-'
-            })
-            
-            cashflow_projection.append(projection_row)
         
-        projection_df = pd.DataFrame(cashflow_projection)
+        # Currency formatter
+        currency_formatter = lambda x: format_currency(x, selected_currency)
+        
+        # Build projection using service
+        projection_df = build_cashflow_projection(
+            starting_age=starting_age,
+            retirement_age=retirement_age,
+            simulation_years=simulation_years,
+            gross_annual_income=gross_annual_income,
+            effective_tax_rate=effective_tax_rate,
+            pension_contribution_rate=pension_contribution_rate,
+            monthly_expenses=monthly_expenses,
+            monthly_mortgage_payment=calculated_payment,
+            salary_inflation=salary_inflation,
+            total_pension_income=total_pension_income if use_pension_data else 0,
+            events=display_events,
+            passive_income_streams=passive_streams_for_projection,
+            include_spouse=include_spouse,
+            spouse_params=spouse_params,
+            currency_formatter=currency_formatter,
+            max_years=30
+        )
+        
+        # Add Monthly Savings column
+        # Extract numeric values from Available Savings column for calculation
+        def extract_numeric(val_str):
+            """Extract numeric value from formatted currency string"""
+            if val_str == '-' or val_str == '':
+                return 0
+            # Remove currency symbols and commas
+            import re
+            numeric_str = re.sub(r'[^\d.-]', '', val_str)
+            try:
+                return float(numeric_str)
+            except:
+                return 0
+        
+        projection_df['Monthly Savings'] = projection_df['Available Savings'].apply(
+            lambda x: format_currency(extract_numeric(x) / 12, selected_currency)
+        )
         
         # Style the dataframe to highlight negative values
         def highlight_negative(val):
@@ -2367,7 +2309,7 @@ with tab1:
         )
         
         st.caption("💡 Take-home income grows with salary inflation. Expenses and mortgage shown in nominal dollars (not inflation-adjusted).")
-        st.caption("📝 Events: 🏠 Property Purchase, 💰 Property Sale, 📊 Expense Change, 🏘️ Rental Income, 💸 One-Time Expense, 💵 Windfall")
+        st.caption("📝 Events: Events This Year column shows all financial events occurring in that projection year.")
         
         # Net Worth by Age Milestones
         st.markdown("---")

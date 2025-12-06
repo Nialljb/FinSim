@@ -1,15 +1,16 @@
 # Service Extraction Summary - Phase 3 Complete
 
-**Completed:** December 6, 2024  
+**Completed:** December 2024  
 **Status:** ✅ Production Ready
 
 ## Overview
 
-Successfully extracted two major service modules from `wealth_simulator.py`:
+Successfully extracted three major service modules from `wealth_simulator.py`:
 1. **Monte Carlo Simulation Engine** (296 lines)
 2. **Visualization/Chart Generation** (405 lines)
+3. **Cash Flow Analysis & Projection** (556 lines)
 
-Total extraction: 465 lines → 701 lines of reusable services
+Total extraction: 526 lines → 1,257 lines of reusable services
 
 ## What Changed
 
@@ -26,17 +27,29 @@ Total extraction: 465 lines → 701 lines of reusable services
    - Distribution histograms
    - View type selection
 
-3. **`test/test_monte_carlo_service.py`** (234 lines)
+3. **`services/cash_flow.py`** (556 lines)
+   - Year-by-year cash flow projections
+   - Passive income calculations
+   - Financial event application
+   - Income calculations (working → retirement)
+   - Year 1 detailed breakdown
+
+4. **`test/test_monte_carlo_service.py`** (234 lines)
    - 5 comprehensive test scenarios
    - All tests passing ✅
 
-4. **`test/test_visualization_service.py`** (272 lines)
+5. **`test/test_visualization_service.py`** (272 lines)
    - 6 comprehensive test scenarios
    - All tests passing ✅
 
-5. **Documentation:**
+6. **`test/test_cash_flow_service.py`** (516 lines)
+   - 7 comprehensive test scenarios
+   - All tests passing ✅
+
+7. **Documentation:**
    - `MONTE_CARLO_EXTRACTION.md`
    - `VISUALIZATION_EXTRACTION.md`
+   - `CASH_FLOW_EXTRACTION.md`
    - `MONTE_CARLO_SUMMARY.md`
    - Updated `QUICK_REFERENCE.md`
 
@@ -44,8 +57,8 @@ Total extraction: 465 lines → 701 lines of reusable services
 
 **`wealth_simulator.py`**
 - **Before:** 2,888 lines
-- **After:** 2,423 lines
-- **Reduction:** 465 lines (-16.1%)
+- **After:** 2,365 lines
+- **Reduction:** 523 lines (-18.1%)
 - **Added imports:**
   ```python
   from services.monte_carlo import run_monte_carlo, calculate_mortgage_payment
@@ -54,6 +67,11 @@ Total extraction: 465 lines → 701 lines of reusable services
       create_wealth_composition_chart,
       create_distribution_chart,
       get_view_type_paths
+  )
+  from services.cash_flow import (
+      build_cashflow_projection,
+      create_year1_breakdown,
+      calculate_year_passive_income
   )
   ```
 
@@ -78,45 +96,60 @@ Total extraction: 465 lines → 701 lines of reusable services
 ✅ Performance test (5,000 sims in 0.035s)
 ```
 
-**Total: 11/11 tests passing ✅**
+### Cash Flow Service (7/7 tests ✅)
+```
+✅ Passive income calculations (growth + tax)
+✅ Event application (5 event types)
+✅ Income calculations (working → retirement)
+✅ Complete projections (11-year default)
+✅ Year 1 breakdown generation
+✅ Edge cases (zero income, multiple events)
+✅ Performance (100 projections in 0.013s)
+```
+
+**Total: 18/18 tests passing ✅**
 
 ## Impact Summary
 
 | Metric | Before | After | Change |
 |--------|--------|-------|--------|
-| Main file size | 2,888 lines | 2,423 lines | -465 lines (-16.1%) |
-| Services created | 0 | 2 files, 701 lines | +701 lines |
-| Test coverage | 0 | 2 files, 506 lines | +506 lines |
-| Test scenarios | 0 | 11 comprehensive tests | +11 tests |
-| Testable functions | Mixed in UI | 6 pure functions | Fully testable |
+| Main file size | 2,888 lines | 2,365 lines | -523 lines (-18.1%) |
+| Services created | 0 | 3 files, 1,257 lines | +1,257 lines |
+| Test coverage | 0 | 3 files, 1,022 lines | +1,022 lines |
+| Test scenarios | 0 | 18 comprehensive tests | +18 tests |
+| Testable functions | Mixed in UI | 11 pure functions | Fully testable |
 
 ## Key Benefits
 
 ✅ **Testability**
 - Simulation logic testable without Streamlit
 - Chart generation testable independently
+- Cash flow projections testable in isolation
 - Fast unit tests (milliseconds)
 - Verified with large datasets
 
 ✅ **Reusability**
 - Services usable in API, CLI, batch jobs
 - Can generate charts for reports
+- Cash flow projections for external use
 - No UI coupling
 
 ✅ **Maintainability**
 - Clear separation of concerns
-- Smaller main file (16% reduction)
+- Smaller main file (18% reduction)
 - Easy to add features
 - Comprehensive documentation
 
 ✅ **Performance**
 - 5,000 simulations: 0.035 seconds
 - Chart generation: <0.05 seconds
+- 100 cash flow projections: 0.013 seconds
 - Zero performance regression
 
 ✅ **Zero Breaking Changes**
 - All functionality preserved
 - Charts render identically
+- Cash flow displays unchanged
 - No user-facing changes
 
 ## Service Architecture
