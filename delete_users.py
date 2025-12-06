@@ -3,7 +3,7 @@ Delete user accounts from the database
 Use with caution - this permanently removes users and their data
 """
 
-from database import SessionLocal, User, Simulation, UsageStats, SavedBudget, PensionPlan, EmailVerification
+from database import SessionLocal, User, Simulation, UsageStats, SavedBudget, PensionPlan, EmailVerification, Feedback
 from sqlalchemy import func
 
 def list_users_with_stats():
@@ -66,11 +66,13 @@ def delete_user(user_id):
         sim_count = db.query(func.count(Simulation.id)).filter(Simulation.user_id == user_id).scalar() or 0
         budget_count = db.query(func.count(SavedBudget.id)).filter(SavedBudget.user_id == user_id).scalar() or 0
         pension_count = db.query(func.count(PensionPlan.id)).filter(PensionPlan.user_id == user_id).scalar() or 0
+        feedback_count = db.query(func.count(Feedback.id)).filter(Feedback.user_id == user_id).scalar() or 0
         
         print(f"\nThis will also delete:")
         print(f"  - {sim_count} simulation(s)")
         print(f"  - {budget_count} budget(s)")
         print(f"  - {pension_count} pension plan(s)")
+        print(f"  - {feedback_count} feedback submission(s)")
         print(f"  - All usage statistics")
         print(f"  - All verification tokens")
         
@@ -78,13 +80,14 @@ def delete_user(user_id):
         
         if response != 'DELETE':
             print("❌ Cancelled. User not deleted.")
-            return False
-        
-        # Delete associated data (cascade delete should handle most of this)
+        # Delete associated data (must delete in order due to foreign key constraints)
+        db.query(Feedback).filter(Feedback.user_id == user_id).delete()
         db.query(EmailVerification).filter(EmailVerification.user_id == user_id).delete()
         db.query(UsageStats).filter(UsageStats.user_id == user_id).delete()
         
         # Delete user (cascade should delete simulations, budgets, etc.)
+        db.delete(user)
+        db.commit()er (cascade should delete simulations, budgets, etc.)
         db.delete(user)
         db.commit()
         
@@ -122,13 +125,14 @@ def delete_multiple_users(user_ids):
         if response != 'DELETE ALL':
             print("❌ Cancelled. No users deleted.")
             return False
-        
         deleted_count = 0
         for user in users:
-            # Delete associated data
+            # Delete associated data in correct order (foreign key constraints)
+            db.query(Feedback).filter(Feedback.user_id == user.id).delete()
             db.query(EmailVerification).filter(EmailVerification.user_id == user.id).delete()
             db.query(UsageStats).filter(UsageStats.user_id == user.id).delete()
             db.delete(user)
+            deleted_count += 1
             deleted_count += 1
         
         db.commit()
