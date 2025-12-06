@@ -204,6 +204,30 @@ class UsageStats(Base):
     def __repr__(self):
         return f"<UsageStats(user_id={self.user_id}, simulations={self.simulations_this_month})>"
 
+
+class EmailVerification(Base):
+    """Email verification tokens for account activation"""
+    __tablename__ = "email_verifications"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    email = Column(String(255), nullable=False, index=True)
+    
+    # Token
+    token = Column(String(255), unique=True, nullable=False, index=True)
+    
+    # Status
+    is_used = Column(Boolean, default=False)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    verified_at = Column(DateTime(timezone=True), nullable=True)
+    
+    def __repr__(self):
+        return f"<EmailVerification(email='{self.email}', is_used={self.is_used})>"
+
+
 class SavedBudget(Base):
     """Saved budget configurations with monthly tracking"""
     __tablename__ = "saved_budgets"

@@ -1,14 +1,15 @@
 """
 Authentication module for FinSim
-Handles user registration, login, and session management
+Handles user registration, login, email verification, and session management
 """
 
 import bcrypt
 import streamlit as st
 from datetime import datetime, timedelta
-from database import SessionLocal, User, UsageStats, Feedback
+from database import SessionLocal, User, UsageStats, Feedback, EmailVerification
 import hashlib
 import secrets
+from email_service import generate_verification_token, send_verification_email, send_welcome_email
 
 
 def hash_password(password: str) -> str:
@@ -24,7 +25,7 @@ def verify_password(password: str, hashed: str) -> bool:
 
 
 def register_user(username: str, email: str, password: str, current_age: int, target_retirement_age: int, country: str = None):
-    """Register a new user"""
+    """Register a new user and send verification email"""
     db = SessionLocal()
     try:
         # Check if username or email already exists
@@ -38,7 +39,7 @@ def register_user(username: str, email: str, password: str, current_age: int, ta
             else:
                 return False, "Email already registered"
         
-        # Create new user
+        # Create new user (email_verified defaults to False)
         hashed_pw = hash_password(password)
         new_user = User(
             username=username,
@@ -47,6 +48,7 @@ def register_user(username: str, email: str, password: str, current_age: int, ta
             current_age=current_age,
             target_retirement_age=target_retirement_age,
             country=country,
+            email_verified=False,
             created_at=datetime.now()
         )
         
@@ -65,7 +67,27 @@ def register_user(username: str, email: str, password: str, current_age: int, ta
         db.add(usage_stats)
         db.commit()
         
-        return True, "Registration successful!"
+        # Create verification token
+        verification_token = generate_verification_token(email)
+        expires_at = datetime.now() + timedelta(hours=24)
+        
+        email_verification = EmailVerification(
+            user_id=new_user.id,
+            email=email,
+            token=verification_token,
+            expires_at=expires_at
+        )
+        db.add(email_verification)
+        db.commit()
+        
+        # Send verification email
+        email_sent, email_message = send_verification_email(email, username, verification_token)
+        
+        if email_sent:
+            return True, "Registration successful! Please check your email to verify your account."
+        else:
+            # Registration still successful, but email failed
+            return True, f"Registration successful! However, verification email could not be sent: {email_message}. Please contact support."
         
     except Exception as e:
         db.rollback()
@@ -89,6 +111,9 @@ def login_user(username_or_email: str, password: str):
         if not user.is_active:
             return None, "Account is deactivated"
         
+        if not user.email_verified:
+            return None, "Please verify your email before logging in. Check your inbox for the verification link."
+        
         if not verify_password(password, user.password_hash):
             return None, "Incorrect password"
         
@@ -111,6 +136,112 @@ def login_user(username_or_email: str, password: str):
         
     except Exception as e:
         return None, f"Login failed: {str(e)}"
+    finally:
+        db.close()
+
+
+def verify_email(token: str):
+    """Verify user email with token
+    
+    Returns:
+        tuple: (success, message, username or None)
+    """
+    db = SessionLocal()
+    try:
+        # Find verification record
+        verification = db.query(EmailVerification).filter(
+            EmailVerification.token == token
+        ).first()
+        
+        if not verification:
+            return False, "Invalid verification link", None
+        
+        if verification.is_used:
+            return False, "This verification link has already been used", None
+        
+        if datetime.now() > verification.expires_at:
+            return False, "This verification link has expired. Please request a new one.", None
+        
+        # Get user
+        user = db.query(User).filter(User.id == verification.user_id).first()
+        
+        if not user:
+            return False, "User not found", None
+        
+        # Mark as verified
+        user.email_verified = True
+        verification.is_used = True
+        verification.verified_at = datetime.now()
+        
+        db.commit()
+        
+        # Send welcome email
+        try:
+            send_welcome_email(user.email, user.username)
+        except:
+            pass  # Don't fail verification if welcome email fails
+        
+        return True, "Email verified successfully! You can now log in.", user.username
+        
+    except Exception as e:
+        db.rollback()
+        return False, f"Verification failed: {str(e)}", None
+    finally:
+        db.close()
+
+
+def resend_verification_email(email: str):
+    """Resend verification email to user
+    
+    Returns:
+        tuple: (success, message)
+    """
+    db = SessionLocal()
+    try:
+        # Find user
+        user = db.query(User).filter(User.email == email).first()
+        
+        if not user:
+            # Don't reveal if email exists
+            return True, "If this email is registered, a verification link has been sent."
+        
+        if user.email_verified:
+            return False, "This email is already verified. Please login."
+        
+        # Create new verification token
+        verification_token = generate_verification_token(email)
+        expires_at = datetime.now() + timedelta(hours=24)
+        
+        # Invalidate old tokens
+        old_verifications = db.query(EmailVerification).filter(
+            EmailVerification.user_id == user.id,
+            EmailVerification.is_used == False
+        ).all()
+        
+        for old_ver in old_verifications:
+            old_ver.is_used = True
+        
+        # Create new verification record
+        email_verification = EmailVerification(
+            user_id=user.id,
+            email=email,
+            token=verification_token,
+            expires_at=expires_at
+        )
+        db.add(email_verification)
+        db.commit()
+        
+        # Send verification email
+        email_sent, email_message = send_verification_email(email, user.username, verification_token)
+        
+        if email_sent:
+            return True, "Verification email sent! Please check your inbox."
+        else:
+            return False, f"Failed to send email: {email_message}"
+        
+    except Exception as e:
+        db.rollback()
+        return False, f"Failed to resend verification: {str(e)}"
     finally:
         db.close()
 
@@ -406,18 +537,58 @@ def logout():
 
 
 def show_login_page():
-    """Display login page"""
+    """Display login page with email verification support"""
     initialize_session_state()
+    
+    # Check for verification token in URL
+    query_params = st.query_params
+    if 'verify' in query_params:
+        verification_token = query_params['verify']
+        
+        st.title("✉️ Email Verification")
+        
+        with st.spinner("Verifying your email..."):
+            success, message, username = verify_email(verification_token)
+            
+            if success:
+                st.success(message)
+                st.balloons()
+                st.info(f"Welcome {username}! You can now log in below.")
+                
+                # Clear the query parameter
+                st.query_params.clear()
+            else:
+                st.error(message)
+                
+                if "expired" in message.lower():
+                    st.markdown("---")
+                    st.subheader("Resend Verification Email")
+                    
+                    with st.form("resend_verification"):
+                        resend_email = st.text_input("Email Address")
+                        resend_submit = st.form_submit_button("Resend Verification")
+                        
+                        if resend_submit:
+                            if resend_email:
+                                success_resend, msg_resend = resend_verification_email(resend_email)
+                                if success_resend:
+                                    st.success(msg_resend)
+                                else:
+                                    st.error(msg_resend)
+                            else:
+                                st.error("Please enter your email address")
+        
+        st.markdown("---")
     
     st.title("🔐 Login to FinSim")
     
-    tab1, tab2 = st.tabs(["Login", "Register"])
+    tab1, tab2, tab3 = st.tabs(["Login", "Register", "Resend Verification"])
     
     with tab1:
         st.subheader("Login to Your Account")
         
         with st.form("login_form"):
-            username = st.text_input("Username")
+            username = st.text_input("Username or Email")
             password = st.text_input("Password", type="password")
             submit = st.form_submit_button("Login")
             
@@ -495,11 +666,32 @@ def show_login_page():
                     
                     if success:
                         st.success(message)
-                        st.info("Please login with your new account")
+                        st.balloons()
+                        st.info("📧 **Check your email!** We've sent you a verification link. Click it to activate your account and start using FinSim.")
+                        st.caption("Can't find the email? Check your spam folder or use the 'Resend Verification' tab.")
                     else:
                         st.error(message)
         
         st.caption("*Required fields")
+    
+    with tab3:
+        st.subheader("Resend Verification Email")
+        st.markdown("Didn't receive the verification email? Enter your email below to get a new one.")
+        
+        with st.form("resend_verification_form"):
+            resend_email = st.text_input("Email Address", key="resend_email_input")
+            resend_submit = st.form_submit_button("Resend Verification Email")
+            
+            if resend_submit:
+                if not resend_email:
+                    st.error("Please enter your email address")
+                else:
+                    success, message = resend_verification_email(resend_email)
+                    if success:
+                        st.success(message)
+                        st.info("📧 Check your inbox for the new verification link!")
+                    else:
+                        st.error(message)
 
 
 def request_password_reset(email: str):
