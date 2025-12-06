@@ -79,27 +79,23 @@ def create_verification_email(email: str, username: str, verification_token: str
                 margin: 0 auto;
                 padding: 20px;
             }}
-            .header {
+            .header {{
                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                 color: #ffffff;
                 padding: 30px;
                 text-align: center;
                 border-radius: 10px 10px 0 0;
-            }
-            .header h1 {
+            }}
+            .header h1 {{
                 color: #ffffff;
                 margin: 0;
-            }
-            .header h1 {
-                color: #ffffff;
-                margin: 0;
-            }
-            .content {
+            }}
+            .content {{
                 background: #f9f9f9;
                 padding: 30px;
                 border-radius: 0 0 10px 10px;
             }}
-            .button {
+            .button {{
                 display: inline-block;
                 padding: 15px 30px;
                 background: #667eea;
@@ -108,8 +104,8 @@ def create_verification_email(email: str, username: str, verification_token: str
                 border-radius: 5px;
                 margin: 20px 0;
                 font-weight: bold;
-            }
-            .footer {{
+            }}
+            .footer {{{
                 text-align: center;
                 margin-top: 30px;
                 font-size: 12px;
@@ -241,10 +237,14 @@ def create_welcome_email(email: str, username: str) -> MIMEMultipart:
             }}
             .header {{
                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
+                color: #ffffff;
                 padding: 30px;
                 text-align: center;
                 border-radius: 10px 10px 0 0;
+            }}
+            .header h1 {{
+                color: #ffffff;
+                margin: 0;
             }}
             .content {{
                 background: #f9f9f9;
@@ -258,7 +258,7 @@ def create_welcome_email(email: str, username: str) -> MIMEMultipart:
                 border-left: 4px solid #667eea;
                 border-radius: 5px;
             }}
-            .button {
+            .button {{
                 display: inline-block;
                 padding: 15px 30px;
                 background: #667eea;
@@ -267,7 +267,7 @@ def create_welcome_email(email: str, username: str) -> MIMEMultipart:
                 border-radius: 5px;
                 margin: 20px 0;
                 font-weight: bold;
-            }
+            }}
         </style>
     </head>
     <body>
