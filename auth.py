@@ -565,8 +565,7 @@ def show_login_page():
             
             if success:
                 st.success(message)
-                st.balloons()
-                st.info(f"Welcome {username}! You can now log in below.")
+                st.info(f"✅ Welcome {username}! You can now log in below.")
                 
                 # Clear the query parameter after successful verification
                 try:
@@ -626,6 +625,8 @@ def show_login_page():
                         st.session_state.current_age = user_data['current_age']
                         st.session_state.target_retirement_age = user_data['target_retirement_age']
                         st.success(message)
+                        
+                        # Force a full page reload to redirect to main app
                         st.rerun()
                     else:
                         st.error(message)

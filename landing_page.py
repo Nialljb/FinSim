@@ -43,6 +43,14 @@ def show_landing_page():
     """
     initialize_session_state()
     
+    # If user is already authenticated, redirect to main app
+    if st.session_state.get('authenticated', False):
+        st.info("You are already logged in. Redirecting to app...")
+        import time
+        time.sleep(1)
+        st.rerun()
+        return
+    
     # Check for email verification FIRST (before other routing)
     try:
         query_params = st.query_params
