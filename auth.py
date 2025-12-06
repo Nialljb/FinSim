@@ -69,7 +69,8 @@ def register_user(username: str, email: str, password: str, current_age: int, ta
         
         # Create verification token
         verification_token = generate_verification_token(email)
-        expires_at = datetime.now() + timedelta(hours=24)
+        from datetime import timezone
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
         
         email_verification = EmailVerification(
             user_id=new_user.id,
@@ -159,7 +160,16 @@ def verify_email(token: str):
         if verification.is_used:
             return False, "This verification link has already been used", None
         
-        if datetime.now() > verification.expires_at:
+        # Make datetime timezone-aware for comparison
+        from datetime import timezone
+        now = datetime.now(timezone.utc)
+        expires_at = verification.expires_at
+        
+        # Ensure expires_at is timezone-aware
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        
+        if now > expires_at:
             return False, "This verification link has expired. Please request a new one.", None
         
         # Get user
@@ -171,7 +181,7 @@ def verify_email(token: str):
         # Mark as verified
         user.email_verified = True
         verification.is_used = True
-        verification.verified_at = datetime.now()
+        verification.verified_at = now
         
         db.commit()
         
@@ -210,7 +220,8 @@ def resend_verification_email(email: str):
         
         # Create new verification token
         verification_token = generate_verification_token(email)
-        expires_at = datetime.now() + timedelta(hours=24)
+        from datetime import timezone
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
         
         # Invalidate old tokens
         old_verifications = db.query(EmailVerification).filter(
