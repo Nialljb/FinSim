@@ -87,8 +87,6 @@ def delete_user(user_id):
         
         # Delete user (cascade should delete simulations, budgets, etc.)
         db.delete(user)
-        db.commit()er (cascade should delete simulations, budgets, etc.)
-        db.delete(user)
         db.commit()
         
         print(f"\n✅ User '{user.username}' and all associated data deleted successfully!")
