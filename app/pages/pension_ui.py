@@ -44,7 +44,7 @@ from pension_planner import (
     create_pension_pie_chart
 )
 
-from database import SessionLocal, PensionPlan
+from data_layer.database import SessionLocal, PensionPlan
 from currency_manager import format_currency
 
 

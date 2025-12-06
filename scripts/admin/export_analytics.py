@@ -5,7 +5,7 @@ Exports structured data for comprehensive analysis of user financial planning be
 
 import pandas as pd
 from datetime import datetime
-from database import SessionLocal, User, Simulation
+from data_layer.database import SessionLocal, User, Simulation
 import json
 import os
 

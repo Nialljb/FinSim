@@ -13,8 +13,8 @@ from reportlab.lib.units import inch
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 import plotly.io as pio
 from auth import initialize_session_state, show_login_page, show_user_header, check_simulation_limit, increment_simulation_count, increment_export_count, reset_simulation_count
-from data_tracking import save_simulation, save_full_simulation, load_simulation, get_user_simulations, delete_simulation, update_simulation_name
-from database import init_db
+from data_layer.data_tracking import save_simulation, save_full_simulation, load_simulation, get_user_simulations, delete_simulation, update_simulation_name
+from data_layer.database import init_db
 from landing_page import show_landing_page
 from currency_converter import get_exchange_rates, convert_currency, show_currency_info
 from services.monte_carlo import run_monte_carlo, calculate_mortgage_payment
@@ -915,7 +915,7 @@ with tab1:
     # Get end_age from pension planner or default to retirement + 20
     end_age = retirement_age + 20
     if st.session_state.get('authenticated', False):
-        from database import SessionLocal, PensionPlan
+        from data_layer.database import SessionLocal, PensionPlan
         db = SessionLocal()
         try:
             pension_plan = db.query(PensionPlan).filter(
@@ -1155,7 +1155,7 @@ with tab1:
     
     if st.session_state.get('authenticated', False):
         # Load pension data
-        from database import SessionLocal, PensionPlan
+        from data_layer.database import SessionLocal, PensionPlan
         db = SessionLocal()
         try:
             pension_plan = db.query(PensionPlan).filter(
@@ -1242,7 +1242,7 @@ with tab1:
     st.sidebar.header("💰 Passive Income Streams")
     
     if st.session_state.get('authenticated', False):
-        from database import (get_user_passive_income_streams, create_passive_income_stream,
+        from data_layer.database import (get_user_passive_income_streams, create_passive_income_stream,
                             delete_passive_income_stream, PassiveIncomeStream)
         
         # Get existing streams
@@ -1811,7 +1811,7 @@ with tab1:
             # Get passive income streams
             passive_streams = []
             if st.session_state.get('authenticated', False):
-                from database import get_user_passive_income_streams
+                from data_layer.database import get_user_passive_income_streams
                 passive_streams = get_user_passive_income_streams(st.session_state.user_id)
 
             results = run_monte_carlo(
@@ -2117,7 +2117,7 @@ with tab1:
             # Calculate passive income for Year 1
             year1_passive_income = 0
             if st.session_state.get('authenticated', False):
-                from database import get_user_passive_income_streams
+                from data_layer.database import get_user_passive_income_streams
                 
                 # Create passive stream class wrapper for service
                 class PassiveStream:
@@ -2221,7 +2221,7 @@ with tab1:
         # Prepare passive income streams for service
         passive_streams_for_projection = None
         if st.session_state.get('authenticated', False):
-            from database import get_user_passive_income_streams
+            from data_layer.database import get_user_passive_income_streams
             
             # Create passive stream class wrapper for service
             class PassiveStream:

@@ -3,7 +3,7 @@ Delete user accounts from the database
 Use with caution - this permanently removes users and their data
 """
 
-from database import SessionLocal, User, Simulation, UsageStats, SavedBudget, PensionPlan, EmailVerification, Feedback
+from data_layer.database import SessionLocal, User, Simulation, UsageStats, SavedBudget, PensionPlan, EmailVerification, Feedback
 from sqlalchemy import func
 
 def list_users_with_stats():

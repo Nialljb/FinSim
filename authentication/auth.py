@@ -6,7 +6,7 @@ Handles user registration, login, email verification, and session management
 import bcrypt
 import streamlit as st
 from datetime import datetime, timedelta
-from database import SessionLocal, User, UsageStats, Feedback, EmailVerification
+from data_layer.database import SessionLocal, User, UsageStats, Feedback, EmailVerification
 import hashlib
 import secrets
 

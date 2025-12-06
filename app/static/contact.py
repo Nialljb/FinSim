@@ -1,6 +1,6 @@
 import streamlit as st
 from datetime import datetime
-from database import submit_contact_form
+from data_layer.database import submit_contact_form
 
 
 def show_contact():

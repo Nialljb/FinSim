@@ -5,7 +5,7 @@ Requires admin authentication
 """
 
 import streamlit as st
-from database import SessionLocal, User, Simulation, SavedBudget, UsageStats, Feedback
+from data_layer.database import SessionLocal, User, Simulation, SavedBudget, UsageStats, Feedback
 from analytics_module import (
     export_all_analytics,
     generate_user_demographics_df,

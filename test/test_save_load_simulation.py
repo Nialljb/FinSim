@@ -2,7 +2,7 @@
 Test script for save/load simulation functionality
 """
 
-from data_tracking import save_full_simulation, load_simulation, get_user_simulations, delete_simulation, update_simulation_name
+from data_layer.data_tracking import save_full_simulation, load_simulation, get_user_simulations, delete_simulation, update_simulation_name
 import numpy as np
 
 # Test user ID (assuming user 1 exists)
