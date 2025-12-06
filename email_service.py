@@ -87,7 +87,7 @@ def create_verification_email(email: str, username: str, verification_token: str
                 border-radius: 10px 10px 0 0;
             }}
             .header h1 {{
-                color: #ffffff;
+                color: #1835f2;
                 margin: 0;
             }}
             .content {{
@@ -115,7 +115,7 @@ def create_verification_email(email: str, username: str, verification_token: str
     </head>
     <body>
         <div class="header">
-            <h1>🎯 Welcome to FinSTK!</h1>
+            <h1> Welcome to FinSTK!</h1>
         </div>
         <div class="content">
             <p>Hi <strong>{username}</strong>,</p>

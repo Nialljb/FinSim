@@ -565,7 +565,7 @@ def show_login_page():
             
             if success:
                 st.success(message)
-                st.info(f"✅ Welcome {username}! You can now log in below.")
+                st.info(f"✅ Welcome {username}! Your account is now verified.")
                 
                 # Clear the query parameter after successful verification
                 try:
@@ -576,6 +576,17 @@ def show_login_page():
                 # Add a delay to ensure database commit is visible
                 import time
                 time.sleep(1)
+                
+                # Provide button to return to landing/login page
+                st.markdown("---")
+                col1, col2, col3 = st.columns([1, 1, 1])
+                with col2:
+                    if st.button("🏠 Go to Login Page", type="primary", use_container_width=True):
+                        st.rerun()
+                
+                st.markdown("---")
+                st.info("💡 Click the button above to proceed to the login page.")
+                st.stop()  # Don't show the login form after successful verification
             else:
                 st.error(message)
                 
