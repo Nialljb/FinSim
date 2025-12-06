@@ -20,7 +20,7 @@ The `app/Home.py` was created to demonstrate the new architecture but currently 
 
 ## 📦 Import Patterns
 
-### Monte Carlo Service (NEW!)
+### Monte Carlo Service
 
 ```python
 # Extracted simulation engine - now independently testable!
@@ -56,6 +56,58 @@ results = run_monte_carlo(
     random_seed=42
 )
 # Returns: dict with net_worth, liquid_wealth, pension_wealth, etc.
+```
+
+### Visualization Service
+
+```python
+# Extracted chart generation - now independently testable!
+from services.visualization import (
+    create_wealth_trajectory_chart,
+    create_wealth_composition_chart,
+    create_distribution_chart,
+    get_view_type_paths
+)
+
+# Get paths for specific view type
+paths, label = get_view_type_paths(
+    "Total Net Worth",
+    display_results,
+    results,
+    n_simulations=1000,
+    show_real=True
+)
+
+# Create wealth trajectory chart
+fig = create_wealth_trajectory_chart(
+    paths_to_plot=paths,
+    years=30,
+    n_simulations=1000,
+    events=[],
+    y_label="Net Worth",
+    currency_symbol="£",
+    starting_age=35,
+    retirement_age=65,
+    end_age=85
+)
+
+# Create wealth composition chart
+fig_comp = create_wealth_composition_chart(
+    display_results=display_results,
+    results=results,
+    years=30,
+    starting_age=35,
+    end_age=85,
+    currency_symbol="£"
+)
+
+# Create distribution chart
+fig_dist = create_distribution_chart(
+    paths_to_plot=paths,
+    simulation_years=30,
+    starting_age=35,
+    currency_symbol="£"
+)
 ```
 
 ### Authentication
