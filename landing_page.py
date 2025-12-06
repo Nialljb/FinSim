@@ -43,6 +43,17 @@ def show_landing_page():
     """
     initialize_session_state()
     
+    # Check for email verification FIRST (before other routing)
+    try:
+        query_params = st.query_params
+        if 'verify' in query_params:
+            # Handle email verification on landing page
+            from auth import show_login_page
+            show_login_page()
+            return
+    except:
+        pass
+    
     # Check for query parameters to route to different pages
     try:
         query_params = st.query_params
