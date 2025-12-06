@@ -105,7 +105,7 @@ def create_verification_email(email: str, username: str, verification_token: str
                 margin: 20px 0;
                 font-weight: bold;
             }}
-            .footer {{{
+            .footer {{
                 text-align: center;
                 margin-top: 30px;
                 font-size: 12px;
