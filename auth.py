@@ -542,6 +542,8 @@ def show_login_page():
     
     # Check for verification token in URL
     query_params = st.query_params
+    
+    # Debug: Show if verify param exists
     if 'verify' in query_params:
         verification_token = query_params['verify']
         
@@ -555,8 +557,15 @@ def show_login_page():
                 st.balloons()
                 st.info(f"Welcome {username}! You can now log in below.")
                 
-                # Clear the query parameter
-                st.query_params.clear()
+                # Clear the query parameter after successful verification
+                try:
+                    st.query_params.clear()
+                except:
+                    pass  # Ignore if clearing fails
+                
+                # Add a delay to ensure database commit is visible
+                import time
+                time.sleep(1)
             else:
                 st.error(message)
                 
