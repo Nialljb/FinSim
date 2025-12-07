@@ -5,8 +5,12 @@ Use with caution - this permanently removes users and their data
 
 import sys
 import os
-# Add project root to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+# Add project root to path - works both locally and on Render
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(os.path.dirname(script_dir))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 from data_layer.database import SessionLocal, User, Simulation, UsageStats, SavedBudget, PensionPlan, EmailVerification, Feedback
 from sqlalchemy import func
