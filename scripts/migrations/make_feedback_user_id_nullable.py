@@ -17,10 +17,10 @@ import sys
 import os
 
 # Add parent directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from sqlalchemy import create_engine, inspect, text
-from database import DATABASE_URL
+from data_layer.database import DATABASE_URL
 
 def make_feedback_user_id_nullable():
     """Make user_id nullable in feedback table"""

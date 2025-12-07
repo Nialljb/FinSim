@@ -5,10 +5,10 @@ SQLite doesn't support ALTER COLUMN, so we need to recreate the table
 
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from sqlalchemy import text
-from database import engine
+from data_layer.database import engine
 
 def upgrade():
     """Make legacy budget columns nullable"""

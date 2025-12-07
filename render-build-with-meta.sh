@@ -5,8 +5,8 @@ echo "Installing Python packages..."
 pip install -r requirements.txt
 
 echo "Running database migrations..."
-python migrate_postgres_budget_columns.py
-python migrate_email_verification.py
+python scripts/migrations/migrate_postgres_budget_columns.py
+python scripts/migrations/migrate_email_verification.py
 
 echo "Modifying Streamlit to inject custom meta tags..."
 

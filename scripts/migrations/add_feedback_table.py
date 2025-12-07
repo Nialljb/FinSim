@@ -11,10 +11,10 @@ import sys
 import os
 
 # Add parent directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from sqlalchemy import create_engine, inspect, text
-from database import DATABASE_URL, Base, Feedback
+from data_layer.database import DATABASE_URL, Base, Feedback
 
 def add_feedback_table():
     """Add feedback table to database if it doesn't exist"""
