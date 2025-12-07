@@ -9,7 +9,7 @@ import numpy as np
 from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 
-from pension_planner import (
+from services.pension_planner import (
     # State Pension
     calculate_state_pension_age,
     estimate_ni_qualifying_years,

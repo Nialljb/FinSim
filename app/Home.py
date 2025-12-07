@@ -46,7 +46,7 @@ from authentication import initialize_session_state, show_user_header
 
 # Import from root modules  
 from database import init_db
-from landing_page import show_landing_page
+from app.landing_page import show_landing_page
 from currency_manager import initialize_currency_system
 
 # ============================================================================

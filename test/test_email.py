@@ -5,7 +5,7 @@ Run this to verify your SMTP settings work before using in production
 
 import os
 from dotenv import load_dotenv
-from email_service import send_email, create_verification_email
+from services.email_service import send_email, create_verification_email
 
 load_dotenv()
 
