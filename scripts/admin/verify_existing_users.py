@@ -3,6 +3,11 @@ Verify existing user accounts that were created before email verification was im
 Run this once to allow existing users to log in.
 """
 
+import sys
+import os
+# Add project root to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
 from data_layer.database import SessionLocal, User
 from datetime import datetime
 

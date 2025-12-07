@@ -3,11 +3,15 @@ Enhanced Analytics Export
 Exports structured data for comprehensive analysis of user financial planning behavior
 """
 
+import sys
+import os
+# Add project root to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
 import pandas as pd
 from datetime import datetime
 from data_layer.database import SessionLocal, User, Simulation
 import json
-import os
 
 
 def export_detailed_analytics():
