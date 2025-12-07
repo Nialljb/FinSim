@@ -16,7 +16,7 @@ from authentication.auth import initialize_session_state, show_login_page, show_
 from data_layer.data_tracking import save_simulation, save_full_simulation, load_simulation, get_user_simulations, delete_simulation, update_simulation_name
 from data_layer.database import init_db
 from app.landing_page import show_landing_page
-from currency_converter import get_exchange_rates, convert_currency, show_currency_info
+from services.currency_converter import get_exchange_rates, convert_currency, show_currency_info
 from services.monte_carlo import run_monte_carlo, calculate_mortgage_payment
 from services.visualization import (
     create_wealth_trajectory_chart,
@@ -32,7 +32,7 @@ from services.cash_flow import (
 
 # ADD THESE LINES after the existing currency_converter import:
 
-from currency_manager import (
+from services.currency_manager import (
     BASE_CURRENCY,
     initialize_currency_system,
     to_base_currency,
@@ -655,11 +655,11 @@ if st.session_state.get('just_set_budget', False):
     st.session_state.just_set_budget = False
 
 with tab2:
-    from budget_builder import show_budget_builder
+    from app.pages.budget_builder import show_budget_builder
     show_budget_builder()
 
 with tab3:
-    from pension_ui import show_pension_planner_tab
+    from app.pages.pension_ui import show_pension_planner_tab
     if st.session_state.get('authenticated', False):
         show_pension_planner_tab(st.session_state.user_id)
     else:
@@ -874,7 +874,7 @@ with tab1:
         if st.sidebar.button("📊 Admin Analytics Dashboard"):
             # Import and run admin analytics module directly
             import importlib.util
-            spec = importlib.util.spec_from_file_location("admin_analytics", "admin_analytics.py")
+            spec = importlib.util.spec_from_file_location("admin_analytics", "scripts/admin/admin_analytics.py")
             admin_module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(admin_module)
             st.stop()

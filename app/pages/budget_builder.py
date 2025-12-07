@@ -9,9 +9,9 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 import json
-from currency_converter import convert_currency
-from currency_manager import format_currency
-from database import save_budget, get_user_budgets, load_budget, delete_budget
+from services.currency_converter import convert_currency
+from services.currency_manager import format_currency
+from data_layer.database import save_budget, get_user_budgets, load_budget, delete_budget
 
 # Budget templates (in Euros)
 BUDGET_TEMPLATES = {

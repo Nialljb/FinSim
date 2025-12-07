@@ -6,7 +6,7 @@ Tests for the canonical base currency system
 
 import pytest
 import streamlit as st
-from currency_manager import (
+from services.currency_manager import (
     BASE_CURRENCY,
     to_base_currency,
     from_base_currency,

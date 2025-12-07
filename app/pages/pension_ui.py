@@ -45,7 +45,7 @@ from services.pension_planner import (
 )
 
 from data_layer.database import SessionLocal, PensionPlan
-from currency_manager import format_currency
+from services.currency_manager import format_currency
 
 
 def show_pension_planner_tab(user_id):

@@ -12,7 +12,7 @@ Design principles:
 
 import streamlit as st
 from typing import Dict, List, Optional
-from currency_converter import get_exchange_rates, convert_currency
+from services.currency_converter import get_exchange_rates, convert_currency
 
 # Canonical base currency - all values stored in this currency internally
 BASE_CURRENCY = 'EUR'
@@ -116,7 +116,7 @@ def to_base_currency(amount: float, from_currency: str) -> float:
         return convert_currency(amount, from_currency, BASE_CURRENCY)
     except Exception as e:
         # Try fallback rates before giving up
-        from currency_converter import FALLBACK_RATES
+        from services.currency_converter import FALLBACK_RATES
         if from_currency in FALLBACK_RATES:
             amount_in_eur = amount / FALLBACK_RATES[from_currency]
             st.warning(f"Using fallback rate for {from_currency}")

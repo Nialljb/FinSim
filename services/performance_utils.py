@@ -52,7 +52,7 @@ def _create_cache_key(params: dict) -> str:
 @st.cache_data(ttl=3600)  # Cache for 1 hour
 def get_cached_exchange_rates():
     """Cache exchange rates to reduce API calls"""
-    from currency_converter import get_exchange_rates
+    from services.currency_converter import get_exchange_rates
     return get_exchange_rates()
 
 
