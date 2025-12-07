@@ -6,7 +6,7 @@ Initializes database and creates first admin user
 
 import sys
 from data_layer.database import init_db, SessionLocal, User
-from auth import hash_password
+from authentication.auth import hash_password
 from datetime import datetime
 
 

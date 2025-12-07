@@ -3,7 +3,7 @@ Professional Landing Page for FinSim with integrated static pages
 """
 
 import streamlit as st
-from auth import initialize_session_state, login_user, register_user, logout, request_password_reset
+from authentication.auth import initialize_session_state, login_user, register_user, logout, request_password_reset
 
 
 def show_about_page():

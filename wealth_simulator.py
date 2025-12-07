@@ -12,7 +12,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 import plotly.io as pio
-from auth import initialize_session_state, show_login_page, show_user_header, check_simulation_limit, increment_simulation_count, increment_export_count, reset_simulation_count
+from authentication.auth import initialize_session_state, show_login_page, show_user_header, check_simulation_limit, increment_simulation_count, increment_export_count, reset_simulation_count
 from data_layer.data_tracking import save_simulation, save_full_simulation, load_simulation, get_user_simulations, delete_simulation, update_simulation_name
 from data_layer.database import init_db
 from landing_page import show_landing_page
