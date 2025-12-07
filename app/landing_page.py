@@ -32,7 +32,7 @@ def show_contact_page():
 
 def show_docs_page():
     """Documentation page content"""
-    from static_pages.docs import show_docs
+    from app.static.docs import show_docs
     show_docs()
 
 
