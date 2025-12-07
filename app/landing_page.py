@@ -56,7 +56,7 @@ def show_landing_page():
         query_params = st.query_params
         if 'verify' in query_params:
             # Handle email verification on landing page
-            from auth import show_login_page
+            from authentication.auth import show_login_page
             show_login_page()
             return
     except:

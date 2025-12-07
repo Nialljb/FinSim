@@ -4,6 +4,11 @@ For developers to access and analyze user data
 Requires admin authentication
 """
 
+import sys
+import os
+# Add project root to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
 import streamlit as st
 from data_layer.database import SessionLocal, User, Simulation, SavedBudget, UsageStats, Feedback
 from services.analytics_module import (

@@ -6,6 +6,9 @@ View users, simulations, and analytics from your database
 
 import os
 import sys
+# Add project root to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
 from data_layer.database import SessionLocal, User, Simulation, UsageStats
 import pandas as pd
 from datetime import datetime

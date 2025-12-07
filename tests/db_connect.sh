@@ -2,7 +2,9 @@
 python view_database.py
 
 # For Render database (get connection string from Render dashboard)
-export DATABASE_URL="postgresql://finsim_user:CbxdqPSFFsephCIBvirbcFOvptEt4Fkl@dpg-d4gddnvpm1nc73f905lg-a.oregon-postgres.render.com/finsim_p6ku"
+# SECURITY: Never commit actual credentials! Use environment variables or .env file
+# export DATABASE_URL="postgresql://user:password@host/database"
+# Get your DATABASE_URL from: Render Dashboard > FinSim Database > Connection String
 python view_database.py
 
 # Specific views
