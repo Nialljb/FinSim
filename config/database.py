@@ -79,7 +79,7 @@ def init_db():
     Should be called on application startup
     """
     # Import all models to ensure they're registered
-    from data.database import Base as ModelsBase
+    from data_layer.database import Base as ModelsBase
     
     # Create all tables
     ModelsBase.metadata.create_all(bind=engine)
