@@ -127,19 +127,68 @@ class UserRepository:
         return self.update(user)
     
     def increment_simulation_count(self, user: User) -> User:
-        """Increment user's simulation count"""
-        user.simulation_count = (user.simulation_count or 0) + 1
-        return self.update(user)
+        """
+        Increment user's simulation count in UsageStats
+        Note: This method updates UsageStats, not User directly
+        """
+        from data_layer.database import UsageStats
+        from datetime import datetime
+        
+        current_month = datetime.now().strftime("%Y-%m")
+        
+        stats = self.db.query(UsageStats).filter(
+            UsageStats.user_id == user.id,
+            UsageStats.current_month == current_month
+        ).first()
+        
+        if stats:
+            stats.simulations_this_month += 1
+            stats.last_simulation_date = datetime.now()
+            self.db.commit()
+        
+        return user
     
     def increment_export_count(self, user: User) -> User:
-        """Increment user's export count"""
-        user.export_count = (user.export_count or 0) + 1
-        return self.update(user)
+        """
+        Increment user's export count in UsageStats
+        Note: This method updates UsageStats, not User directly
+        """
+        from data_layer.database import UsageStats
+        from datetime import datetime
+        
+        current_month = datetime.now().strftime("%Y-%m")
+        
+        stats = self.db.query(UsageStats).filter(
+            UsageStats.user_id == user.id,
+            UsageStats.current_month == current_month
+        ).first()
+        
+        if stats:
+            stats.exports_this_month += 1
+            self.db.commit()
+        
+        return user
     
     def reset_simulation_count(self, user: User) -> User:
-        """Reset user's simulation count to 0"""
-        user.simulation_count = 0
-        return self.update(user)
+        """
+        Reset user's simulation count in UsageStats
+        Note: This method updates UsageStats, not User directly
+        """
+        from data_layer.database import UsageStats
+        from datetime import datetime
+        
+        current_month = datetime.now().strftime("%Y-%m")
+        
+        stats = self.db.query(UsageStats).filter(
+            UsageStats.user_id == user.id,
+            UsageStats.current_month == current_month
+        ).first()
+        
+        if stats:
+            stats.simulations_this_month = 0
+            self.db.commit()
+        
+        return user
     
     def exists(self, username: Optional[str] = None, email: Optional[str] = None) -> bool:
         """
