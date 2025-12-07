@@ -12,15 +12,27 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 import plotly.io as pio
-from auth import initialize_session_state, show_login_page, show_user_header, check_simulation_limit, increment_simulation_count, increment_export_count, reset_simulation_count
-from data_tracking import save_simulation, save_full_simulation, load_simulation, get_user_simulations, delete_simulation, update_simulation_name
-from database import init_db
-from landing_page import show_landing_page
-from currency_converter import get_exchange_rates, convert_currency, show_currency_info
+from authentication.auth import initialize_session_state, show_login_page, show_user_header, check_simulation_limit, increment_simulation_count, increment_export_count, reset_simulation_count
+from data_layer.data_tracking import save_simulation, save_full_simulation, load_simulation, get_user_simulations, delete_simulation, update_simulation_name
+from data_layer.database import init_db
+from app.landing_page import show_landing_page
+from services.currency_converter import get_exchange_rates, convert_currency, show_currency_info
+from services.monte_carlo import run_monte_carlo, calculate_mortgage_payment
+from services.visualization import (
+    create_wealth_trajectory_chart,
+    create_wealth_composition_chart,
+    create_distribution_chart,
+    get_view_type_paths
+)
+from services.cash_flow import (
+    build_cashflow_projection,
+    create_year1_breakdown,
+    calculate_year_passive_income
+)
 
 # ADD THESE LINES after the existing currency_converter import:
 
-from currency_manager import (
+from services.currency_manager import (
     BASE_CURRENCY,
     initialize_currency_system,
     to_base_currency,
@@ -619,241 +631,6 @@ def export_to_pdf(results, currency_symbol, selected_currency, events, fig_main,
     return output
 
 
-def run_monte_carlo(initial_liquid_wealth, initial_property_value, initial_mortgage,
-                    gross_annual_income, effective_tax_rate, pension_contribution_rate,
-                    monthly_expenses, monthly_mortgage_payment,
-                    property_appreciation, mortgage_interest_rate,
-                    expected_return, return_volatility, expected_inflation, inflation_volatility,
-                    salary_inflation, years, n_simulations, events, random_seed,
-                    starting_age=30, retirement_age=65, pension_income=0, passive_income_streams=None,
-                    include_spouse=False, spouse_age=None, spouse_retirement_age=None, spouse_annual_income=0):
-    """Run Monte Carlo simulation for wealth paths
-    
-    Args:
-        starting_age: Current age
-        retirement_age: Age when employment income stops
-        pension_income: Annual pension income after retirement (in base currency)
-        passive_income_streams: List of passive income stream objects
-        include_spouse: Whether to include spouse in simulation
-        spouse_age: Current age of spouse
-        spouse_retirement_age: Retirement age of spouse
-        spouse_annual_income: Spouse's annual gross income
-    """
-    np.random.seed(random_seed)
-    
-    liquid_wealth_paths = np.zeros((n_simulations, years + 1))
-    property_value_paths = np.zeros((n_simulations, years + 1))
-    mortgage_balance_paths = np.zeros((n_simulations, years + 1))
-    pension_wealth_paths = np.zeros((n_simulations, years + 1))
-    
-    monthly_expenses_tracker = np.full((n_simulations, years + 1), monthly_expenses, dtype=float)
-    monthly_mortgage_tracker = np.full((n_simulations, years + 1), monthly_mortgage_payment, dtype=float)
-    monthly_rental_tracker = np.zeros((n_simulations, years + 1))
-    monthly_passive_income_tracker = np.zeros((n_simulations, years + 1))
-    
-    # Initialize passive income streams
-    if passive_income_streams is None:
-        passive_income_streams = []
-    
-    liquid_wealth_paths[:, 0] = initial_liquid_wealth
-    property_value_paths[:, 0] = initial_property_value
-    mortgage_balance_paths[:, 0] = initial_mortgage
-    pension_wealth_paths[:, 0] = 0
-    
-    net_worth_paths = np.zeros((n_simulations, years + 1))
-    net_worth_paths[:, 0] = initial_liquid_wealth + initial_property_value - initial_mortgage
-    
-    real_net_worth_paths = np.zeros((n_simulations, years + 1))
-    real_net_worth_paths[:, 0] = net_worth_paths[:, 0]
-    
-    portfolio_returns = np.random.normal(expected_return, return_volatility, (n_simulations, years))
-    pension_returns = np.random.normal(expected_return, return_volatility, (n_simulations, years))
-    inflation_rates = np.random.normal(expected_inflation, inflation_volatility, (n_simulations, years))
-    inflation_rates = np.maximum(inflation_rates, -0.05)
-    
-    events_by_year = {}
-    for event in events:
-        year = event['year']
-        if year not in events_by_year:
-            events_by_year[year] = []
-        events_by_year[year].append(event)
-    
-    for year in range(1, years + 1):
-        cumulative_inflation = np.prod(1 + inflation_rates[:, :year], axis=1)
-        cumulative_salary_growth = (1 + salary_inflation) ** year
-        
-        current_monthly_expenses = monthly_expenses_tracker[:, year - 1]
-        current_monthly_mortgage = monthly_mortgage_tracker[:, year - 1]
-        current_monthly_rental = monthly_rental_tracker[:, year - 1]
-        current_monthly_passive = monthly_passive_income_tracker[:, year - 1]
-        
-        # Calculate passive income for this year
-        year_passive_income = 0
-        for stream in passive_income_streams:
-            # Check if stream is active this year
-            if stream.start_year <= year and (stream.end_year is None or year <= stream.end_year):
-                # Calculate growth since start
-                years_active = year - stream.start_year
-                growth_factor = (1 + stream.annual_growth_rate) ** years_active
-                stream_annual_amount = stream.monthly_amount * 12 * growth_factor
-                
-                # Apply tax if applicable
-                if stream.is_taxable:
-                    tax_rate = stream.tax_rate if stream.tax_rate is not None else effective_tax_rate
-                    stream_annual_amount *= (1 - tax_rate)
-                
-                year_passive_income += stream_annual_amount
-        
-        # Passive income is the same for all simulation paths (not random)
-        # Adjust for inflation to get real value
-        year_passive_income_adjusted = year_passive_income * cumulative_inflation
-        
-        # Calculate current age for this year
-        current_age = starting_age + year
-        
-        # Determine if in retirement
-        is_retired = current_age > retirement_age
-        
-        # Calculate spouse current age and retirement status (if applicable)
-        spouse_is_retired = False
-        if include_spouse and spouse_age is not None and spouse_retirement_age is not None:
-            spouse_current_age = spouse_age + year
-            spouse_is_retired = spouse_current_age > spouse_retirement_age
-        
-        # Calculate household income
-        year_gross_income = 0
-        year_pension_contribution = 0
-        year_take_home = 0
-        
-        # Primary income
-        if not is_retired:
-            # Pre-retirement: employment income
-            primary_gross = gross_annual_income * cumulative_salary_growth
-            primary_pension_contrib = primary_gross * pension_contribution_rate
-            primary_take_home = primary_gross * (1 - effective_tax_rate - pension_contribution_rate)
-            
-            year_gross_income += primary_gross
-            year_pension_contribution += primary_pension_contrib
-            year_take_home += primary_take_home
-        else:
-            # Post-retirement: pension income only
-            years_since_retirement = current_age - retirement_age
-            retirement_inflation = np.prod(1 + inflation_rates[:, retirement_age-starting_age:year], axis=1) if years_since_retirement > 0 else 1.0
-            year_take_home += pension_income * retirement_inflation
-        
-        # Spouse income (if enabled)
-        if include_spouse and spouse_annual_income > 0:
-            if not spouse_is_retired:
-                # Spouse working: employment income
-                spouse_gross = spouse_annual_income * cumulative_salary_growth
-                spouse_pension_contrib = spouse_gross * pension_contribution_rate
-                spouse_take_home = spouse_gross * (1 - effective_tax_rate - pension_contribution_rate)
-                
-                year_gross_income += spouse_gross
-                year_pension_contribution += spouse_pension_contrib
-                year_take_home += spouse_take_home
-            # Note: spouse pension income will be handled separately via pension planner integration
-        
-        year_expenses = current_monthly_expenses * 12 * cumulative_inflation
-        year_mortgage_payment = current_monthly_mortgage * 12
-        year_rental_income = current_monthly_rental * 12 * cumulative_inflation
-        
-        year_available_savings = year_take_home + year_rental_income + year_passive_income_adjusted - year_expenses - year_mortgage_payment
-        
-        # Only contribute to pension pre-retirement
-        if not is_retired:
-            pension_wealth_paths[:, year] = (
-                pension_wealth_paths[:, year - 1] * (1 + pension_returns[:, year - 1]) +
-                year_pension_contribution
-            )
-        else:
-            # In retirement, pension pot still grows but no new contributions
-            pension_wealth_paths[:, year] = (
-                pension_wealth_paths[:, year - 1] * (1 + pension_returns[:, year - 1])
-            )
-        
-        liquid_wealth_paths[:, year] = (
-            liquid_wealth_paths[:, year - 1] * (1 + portfolio_returns[:, year - 1]) +
-            year_available_savings
-        )
-        
-        property_value_paths[:, year] = (
-            property_value_paths[:, year - 1] * (1 + property_appreciation)
-        )
-        
-        if mortgage_balance_paths[:, year - 1].mean() > 0:
-            year_interest = mortgage_balance_paths[:, year - 1] * mortgage_interest_rate
-            year_principal = np.maximum(year_mortgage_payment - year_interest, 0)
-            mortgage_balance_paths[:, year] = np.maximum(
-                mortgage_balance_paths[:, year - 1] - year_principal, 0
-            )
-        else:
-            mortgage_balance_paths[:, year] = 0
-        
-        if year in events_by_year:
-            for event in events_by_year[year]:
-                if event['type'] == 'property_purchase':
-                    liquid_wealth_paths[:, year] -= event['down_payment']
-                    property_value_paths[:, year] += event['property_price']
-                    mortgage_balance_paths[:, year] += event['mortgage_amount']
-                    monthly_mortgage_tracker[:, year:] = event['new_mortgage_payment']
-                    
-                elif event['type'] == 'property_sale':
-                    net_proceeds = (event['sale_price'] - event['mortgage_payoff'] - event['selling_costs'])
-                    liquid_wealth_paths[:, year] += net_proceeds
-                    property_value_paths[:, year] = 0
-                    mortgage_balance_paths[:, year] = np.maximum(
-                        mortgage_balance_paths[:, year] - event['mortgage_payoff'], 0
-                    )
-                    if event['mortgage_payoff'] >= mortgage_balance_paths[:, year].mean():
-                        monthly_mortgage_tracker[:, year:] = 0
-                    
-                elif event['type'] == 'one_time_expense':
-                    liquid_wealth_paths[:, year] -= event['amount']
-                    
-                elif event['type'] == 'expense_change':
-                    monthly_expenses_tracker[:, year:] += event['monthly_change']
-                    
-                elif event['type'] == 'rental_income':
-                    monthly_rental_tracker[:, year:] += event['monthly_rental']
-                    
-                elif event['type'] == 'windfall':
-                    liquid_wealth_paths[:, year] += event['amount']
-        
-        net_worth_paths[:, year] = (
-            liquid_wealth_paths[:, year] +
-            pension_wealth_paths[:, year] +
-            property_value_paths[:, year] -
-            mortgage_balance_paths[:, year]
-        )
-        
-        real_net_worth_paths[:, year] = net_worth_paths[:, year] / cumulative_inflation
-    
-    return {
-        'net_worth': net_worth_paths,
-        'real_net_worth': real_net_worth_paths,
-        'liquid_wealth': liquid_wealth_paths,
-        'pension_wealth': pension_wealth_paths,
-        'property_value': property_value_paths,
-        'mortgage_balance': mortgage_balance_paths,
-        'inflation_rates': inflation_rates
-    }
-
-
-# Helper function to calculate mortgage payment
-def calculate_mortgage_payment(principal, annual_rate, years):
-    """Calculate monthly mortgage payment"""
-    if principal <= 0 or years <= 0:
-        return 0
-    monthly_rate = annual_rate / 12
-    n_payments = years * 12
-    if monthly_rate > 0:
-        payment = principal * (monthly_rate * (1 + monthly_rate)**n_payments) / ((1 + monthly_rate)**n_payments - 1)
-    else:
-        payment = principal / n_payments
-    return payment
-
-
 # Create tabs with session state control
 # Check if we should switch to simulation tab
 if st.session_state.get('switch_to_simulation', False):
@@ -878,11 +655,11 @@ if st.session_state.get('just_set_budget', False):
     st.session_state.just_set_budget = False
 
 with tab2:
-    from budget_builder import show_budget_builder
+    from app.pages.budget_builder import show_budget_builder
     show_budget_builder()
 
 with tab3:
-    from pension_ui import show_pension_planner_tab
+    from app.pages.pension_ui import show_pension_planner_tab
     if st.session_state.get('authenticated', False):
         show_pension_planner_tab(st.session_state.user_id)
     else:
@@ -1097,7 +874,7 @@ with tab1:
         if st.sidebar.button("📊 Admin Analytics Dashboard"):
             # Import and run admin analytics module directly
             import importlib.util
-            spec = importlib.util.spec_from_file_location("admin_analytics", "admin_analytics.py")
+            spec = importlib.util.spec_from_file_location("admin_analytics", "scripts/admin/admin_analytics.py")
             admin_module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(admin_module)
             st.stop()
@@ -1138,7 +915,7 @@ with tab1:
     # Get end_age from pension planner or default to retirement + 20
     end_age = retirement_age + 20
     if st.session_state.get('authenticated', False):
-        from database import SessionLocal, PensionPlan
+        from data_layer.database import SessionLocal, PensionPlan
         db = SessionLocal()
         try:
             pension_plan = db.query(PensionPlan).filter(
@@ -1378,7 +1155,7 @@ with tab1:
     
     if st.session_state.get('authenticated', False):
         # Load pension data
-        from database import SessionLocal, PensionPlan
+        from data_layer.database import SessionLocal, PensionPlan
         db = SessionLocal()
         try:
             pension_plan = db.query(PensionPlan).filter(
@@ -1465,7 +1242,7 @@ with tab1:
     st.sidebar.header("💰 Passive Income Streams")
     
     if st.session_state.get('authenticated', False):
-        from database import (get_user_passive_income_streams, create_passive_income_stream,
+        from data_layer.database import (get_user_passive_income_streams, create_passive_income_stream,
                             delete_passive_income_stream, PassiveIncomeStream)
         
         # Get existing streams
@@ -2034,7 +1811,7 @@ with tab1:
             # Get passive income streams
             passive_streams = []
             if st.session_state.get('authenticated', False):
-                from database import get_user_passive_income_streams
+                from data_layer.database import get_user_passive_income_streams
                 passive_streams = get_user_passive_income_streams(st.session_state.user_id)
 
             results = run_monte_carlo(
@@ -2161,177 +1938,25 @@ with tab1:
         # Select paths based on view
         years = simulation_years
         
-        if view_type == "Total Net Worth":
-            paths_to_plot = display_results['real_net_worth'] if show_real else display_results['net_worth']
-            y_label = "Net Worth"
-        elif view_type == "Liquid Wealth":
-            paths_to_plot = display_results['liquid_wealth']
-            if show_real:
-                cumulative_inflation = np.cumprod(1 + results['inflation_rates'], axis=1)
-                cumulative_inflation = np.column_stack([np.ones(n_simulations), cumulative_inflation])
-                paths_to_plot = paths_to_plot / cumulative_inflation
-            y_label = "Liquid Wealth"
-        elif view_type == "Property Equity":
-            paths_to_plot = display_results['property_value'] - display_results['mortgage_balance']
-            if show_real:
-                cumulative_inflation = np.cumprod(1 + results['inflation_rates'], axis=1)
-                cumulative_inflation = np.column_stack([np.ones(n_simulations), cumulative_inflation])
-                paths_to_plot = paths_to_plot / cumulative_inflation
-            y_label = "Property Equity"
-        else:
-            paths_to_plot = display_results['pension_wealth']
-            if show_real:
-                cumulative_inflation = np.cumprod(1 + results['inflation_rates'], axis=1)
-                cumulative_inflation = np.column_stack([np.ones(n_simulations), cumulative_inflation])
-                paths_to_plot = paths_to_plot / cumulative_inflation
-            y_label = "Pension Wealth"
-        
-        # Calculate percentiles
-        percentiles = [10, 25, 50, 75, 90]
-        percentile_data = np.percentile(paths_to_plot, percentiles, axis=0)
-        
-        # Create main chart
-        fig = go.Figure()
-        
-        n_sample_paths = min(100, n_simulations)
-        sample_indices = np.random.choice(n_simulations, n_sample_paths, replace=False)
-        
-        for idx in sample_indices:
-            fig.add_trace(go.Scatter(
-                x=list(range(years + 1)),
-                y=paths_to_plot[idx],
-                mode='lines',
-                line=dict(color='lightblue', width=0.5),
-                opacity=0.3,
-                showlegend=False,
-                hoverinfo='skip'
-            ))
-        
-        colors = ['rgba(255,0,0,0.1)', 'rgba(255,165,0,0.15)', 'rgba(0,128,0,0.2)', 
-                'rgba(255,165,0,0.15)', 'rgba(255,0,0,0.1)']
-        
-        fig.add_trace(go.Scatter(
-            x=list(range(years + 1)),
-            y=percentile_data[0],
-            mode='lines',
-            line=dict(width=0),
-            showlegend=False,
-            hoverinfo='skip'
-        ))
-        
-        for i in range(len(percentiles)-1):
-            fig.add_trace(go.Scatter(
-                x=list(range(years + 1)),
-                y=percentile_data[i+1],
-                mode='lines',
-                line=dict(width=0),
-                fill='tonexty',
-                fillcolor=colors[i],
-                name=f'{percentiles[i]}-{percentiles[i+1]}th percentile',
-                hoverinfo='skip'
-            ))
-        
-        fig.add_trace(go.Scatter(
-            x=list(range(years + 1)),
-            y=percentile_data[2],
-            mode='lines',
-            line=dict(color='darkgreen', width=3),
-            name='Median (50th percentile)'
-        ))
-        
-        event_colors = {
-            'property_purchase': 'blue',
-            'property_sale': 'green',
-            'one_time_expense': 'red',
-            'expense_change': 'orange',
-            'rental_income': 'teal',
-            'windfall': 'purple'
-        }
-        
-        for event in events:
-            color = event_colors.get(event.get('type', 'unknown'), 'gray')
-            fig.add_vline(
-                x=event['year'],
-                line_dash="dash",
-                line_color=color,
-                annotation_text=event['name'],
-                annotation_position="top"
-            )
-        
-        # Add retirement marker if enabled and pension data is used
-        if show_retirement_period and use_pension_data and total_pension_income > 0:
-            retirement_year = retirement_age - starting_age
-            fig.add_vrect(
-                x0=retirement_year,
-                x1=years,
-                fillcolor="rgba(255, 215, 0, 0.1)",
-                layer="below",
-                line_width=0,
-                annotation_text="Retirement Period",
-                annotation_position="top left"
-            )
-            fig.add_vline(
-                x=retirement_year,
-                line_dash="solid",
-                line_color="gold",
-                line_width=3,
-                annotation_text=f"Retirement (Age {retirement_age})",
-                annotation_position="top"
-            )
-        
-        # Calculate 90th percentile for y-axis cap
-        percentile_90 = np.percentile(paths_to_plot, 90, axis=0).max()
-        
-        # Determine x-axis range based on retirement period toggle
-        retirement_year = retirement_age - starting_age
-        if show_retirement_period:
-            # Show from retirement onwards
-            x_range = [retirement_year, years]
-            chart_title = f"{y_label} in Retirement: Age {retirement_age} to {end_age}"
-        else:
-            # Show working period + 10 years with retirement marker
-            working_years_plus_10 = min(retirement_year + 10, years)
-            x_range = [0, working_years_plus_10]
-            chart_title = f"{y_label} Trajectory: Age {starting_age} to {starting_age + working_years_plus_10}"
-            
-            # Add retirement bisection line for non-retirement view
-            fig.add_vline(
-                x=retirement_year,
-                line_dash="solid",
-                line_color="gold",
-                line_width=2,
-                annotation_text=f"Retirement (Age {retirement_age})",
-                annotation_position="top"
-            )
-        
-        # Create secondary x-axis showing age alongside years
-        years_list = list(range(int(x_range[0]), int(x_range[1]) + 1))
-        ages_list = [starting_age + y for y in years_list]
-        
-        # Create tick labels with both years and age
-        tick_step = max(1, len(years_list) // 10)  # Show ~10 ticks max
-        tickvals = [y for i, y in enumerate(years_list) if i % tick_step == 0]
-        ticktext = [f"Yr {y}<br>Age {starting_age + y}" for y in tickvals]
-        
-        fig.update_layout(
-            title=chart_title,
-            xaxis_title="Years from Now / Age",
-            yaxis_title=f"{y_label} ({currency_symbol})",
-            hovermode='x unified',
-            height=700,
-            showlegend=True
+        # Use visualization service to get paths
+        paths_to_plot, y_label = get_view_type_paths(
+            view_type, display_results, results, n_simulations, show_real
         )
         
-        fig.update_xaxes(
-            range=x_range,
-            tickvals=tickvals,
-            ticktext=ticktext
-        )
-        
-        fig.update_yaxes(
-            tickprefix=currency_symbol, 
-            tickformat=",.0f",
-            range=[0, percentile_90 * 1.05]  # Cap at 90th percentile + 5% margin
+        # Create main chart using visualization service
+        fig = create_wealth_trajectory_chart(
+            paths_to_plot=paths_to_plot,
+            years=years,
+            n_simulations=n_simulations,
+            events=events,
+            y_label=y_label,
+            currency_symbol=currency_symbol,
+            starting_age=starting_age,
+            retirement_age=retirement_age,
+            end_age=end_age,
+            show_retirement_period=show_retirement_period,
+            use_pension_data=use_pension_data,
+            total_pension_income=total_pension_income
         )
         
         st.plotly_chart(fig, use_container_width=True)
@@ -2367,71 +1992,16 @@ with tab1:
         # Wealth composition
         st.subheader("Wealth Composition Over Time (Median Scenario)")
         
-        fig_composition = go.Figure()
-        
-        median_liquid = np.median(display_results['liquid_wealth'], axis=0)
-        median_pension = np.median(display_results['pension_wealth'], axis=0)
-        median_property = np.median(display_results['property_value'], axis=0)
-        median_mortgage = np.median(display_results['mortgage_balance'], axis=0)
-        median_equity = median_property - median_mortgage
-        median_net_worth = median_liquid + median_pension + median_equity
-        
-        if show_real:
-            inflation_adjustment = np.concatenate([
-                [1], 
-                np.cumprod(1 + np.median(results['inflation_rates'], axis=0))
-            ])
-            median_liquid = median_liquid / inflation_adjustment
-            median_pension = median_pension / inflation_adjustment
-            median_equity = median_equity / inflation_adjustment
-            median_net_worth = median_net_worth / inflation_adjustment
-        
-        fig_composition.add_trace(go.Scatter(
-            x=list(range(years + 1)),
-            y=median_liquid,
-            mode='lines',
-            name='Liquid Wealth',
-            line=dict(color='#1f77b4', width=2),
-            fill='tozeroy',
-            fillcolor='rgba(31, 119, 180, 0.3)'
-        ))
-        
-        fig_composition.add_trace(go.Scatter(
-            x=list(range(years + 1)),
-            y=median_pension,
-            mode='lines',
-            name='Pension',
-            line=dict(color='#ff7f0e', width=2)
-        ))
-        
-        fig_composition.add_trace(go.Scatter(
-            x=list(range(years + 1)),
-            y=median_equity,
-            mode='lines',
-            name='Property Equity',
-            line=dict(color='#2ca02c', width=2)
-        ))
-        
-        fig_composition.add_trace(go.Scatter(
-            x=list(range(years + 1)),
-            y=median_net_worth,
-            mode='lines',
-            name='Total Net Worth',
-            line=dict(color='black', width=3, dash='dash')
-        ))
-        
-        fig_composition.add_hline(y=0, line_dash="dot", line_color="gray", opacity=0.5)
-        
-        fig_composition.update_layout(
-            title=f"Wealth Composition: Age {starting_age} to {end_age}",
-            xaxis_title="Years from Now",
-            yaxis_title=f"Value ({currency_symbol})",
-            hovermode='x unified',
-            height=400,
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        # Create composition chart using visualization service
+        fig_composition = create_wealth_composition_chart(
+            display_results=display_results,
+            results=results,
+            years=years,
+            starting_age=starting_age,
+            end_age=end_age,
+            currency_symbol=currency_symbol,
+            show_real=show_real
         )
-        
-        fig_composition.update_yaxes(tickprefix=currency_symbol, tickformat=",.0f")
         
         st.plotly_chart(fig_composition, use_container_width=True)
         
@@ -2543,67 +2113,56 @@ with tab1:
         
         with col1:
             st.markdown("**Year 1 Cash Flow Breakdown**")
-            year1_income = gross_annual_income
-            year1_pension = year1_income * pension_contribution_rate
-            year1_tax = year1_income * effective_tax_rate
-            year1_takehome = year1_income - year1_pension - year1_tax
             
             # Calculate passive income for Year 1
             year1_passive_income = 0
             if st.session_state.get('authenticated', False):
-                from database import get_user_passive_income_streams
-                passive_streams = get_user_passive_income_streams(st.session_state.user_id)
+                from data_layer.database import get_user_passive_income_streams
                 
-                for stream in passive_streams:
-                    if stream.start_year <= 1 and (stream.end_year is None or 1 <= stream.end_year):
-                        years_active = 1 - stream.start_year
-                        growth_factor = (1 + stream.annual_growth_rate) ** years_active
-                        stream_annual_amount = from_base_currency(stream.monthly_amount * 12 * growth_factor, selected_currency)
-                        
-                        if stream.is_taxable:
-                            tax_rate = stream.tax_rate if stream.tax_rate is not None else effective_tax_rate
-                            stream_annual_amount *= (1 - tax_rate)
-                        
-                        year1_passive_income += stream_annual_amount
+                # Create passive stream class wrapper for service
+                class PassiveStream:
+                    def __init__(self, stream_data):
+                        self.start_year = stream_data.start_year
+                        self.end_year = stream_data.end_year
+                        self.monthly_amount = from_base_currency(stream_data.monthly_amount, selected_currency)
+                        self.annual_growth_rate = stream_data.annual_growth_rate
+                        self.is_taxable = stream_data.is_taxable
+                        self.tax_rate = stream_data.tax_rate
+                
+                passive_streams_data = get_user_passive_income_streams(st.session_state.user_id)
+                passive_streams = [PassiveStream(s) for s in passive_streams_data]
+                year1_passive_income = calculate_year_passive_income(
+                    year=1,
+                    passive_streams=passive_streams,
+                    effective_tax_rate=effective_tax_rate
+                )
             
-            year1_expenses = monthly_expenses * 12
-            year1_mortgage = st.session_state.get('monthly_mortgage_payment', 0) * 12
-            year1_available = year1_takehome + year1_passive_income - year1_expenses - year1_mortgage
+            # Create Year 1 breakdown using service
+            currency_formatter = lambda x: format_currency(x, selected_currency)
+            cashflow_df, year1_available, status = create_year1_breakdown(
+                gross_annual_income=gross_annual_income,
+                pension_contribution_rate=pension_contribution_rate,
+                effective_tax_rate=effective_tax_rate,
+                monthly_expenses=monthly_expenses,
+                monthly_mortgage=st.session_state.get('monthly_mortgage_payment', 0),
+                passive_income_annual=year1_passive_income,
+                currency_formatter=currency_formatter
+            )
             
-            cashflow_items = [
-                'Gross Income', '- Pension Contrib', '- Tax', '= Take Home'
-            ]
-            cashflow_amounts = [
-                format_currency(year1_income, selected_currency),
-                format_currency(year1_pension, selected_currency),
-                format_currency(year1_tax, selected_currency),
-                format_currency(year1_takehome, selected_currency)
-            ]
-            
-            if year1_passive_income > 0:
-                cashflow_items.append('+ Passive Income')
-                cashflow_amounts.append(format_currency(year1_passive_income, selected_currency))
-            
-            cashflow_items.extend(['- Living Expenses', '- Mortgage', '= Available for Investment'])
-            cashflow_amounts.extend([
-                format_currency(year1_expenses, selected_currency),
-                format_currency(year1_mortgage, selected_currency),
-                format_currency(year1_available, selected_currency)
-            ])
-            
-            cashflow_df = pd.DataFrame({
-                'Item': cashflow_items,
-                'Amount': cashflow_amounts
-            })
             st.dataframe(cashflow_df, use_container_width=True, hide_index=True)
             
-            if year1_available < 0:
+            if status == 'deficit':
                 st.error(f"⚠️ Cash flow deficit: {format_currency(abs(year1_available), selected_currency)}/year")
             else:
                 st.success(f"✓ Annual savings: {format_currency(year1_available, selected_currency)} ({format_currency(year1_available/12, selected_currency)}/month)")
         
         with col2:
             st.markdown("**Key Metrics**")
+            year1_income = gross_annual_income
+            year1_pension = year1_income * pension_contribution_rate
+            year1_tax = year1_income * effective_tax_rate
+            take_home = year1_income - year1_pension - year1_tax
+            
             st.metric(
                 "Year 1 Net Income",
                 format_currency(take_home, selected_currency),
@@ -2659,130 +2218,78 @@ with tab1:
         st.markdown("---")
         st.subheader("Cash Flow Projection with Financial Events")
         
-        # Build year-by-year cash flow projection
-        # First 10 years: every year, then 5-year intervals
-        max_projection_year = min(simulation_years, 30)
-        projection_years = list(range(0, min(11, max_projection_year + 1)))
-        if max_projection_year > 10:
-            projection_years += [y for y in [15, 20, 25, 30] if y <= max_projection_year]
+        # Prepare passive income streams for service
+        passive_streams_for_projection = None
+        if st.session_state.get('authenticated', False):
+            from data_layer.database import get_user_passive_income_streams
+            
+            # Create passive stream class wrapper for service
+            class PassiveStream:
+                def __init__(self, stream_data):
+                    self.start_year = stream_data.start_year
+                    self.end_year = stream_data.end_year
+                    self.monthly_amount = from_base_currency(stream_data.monthly_amount, selected_currency)
+                    self.annual_growth_rate = stream_data.annual_growth_rate
+                    self.is_taxable = stream_data.is_taxable
+                    self.tax_rate = stream_data.tax_rate
+            
+            passive_streams_data = get_user_passive_income_streams(st.session_state.user_id)
+            passive_streams_for_projection = [PassiveStream(s) for s in passive_streams_data]
         
-        cashflow_projection = []
+        # Convert events from base to display currency
+        display_events = convert_events_from_base(base_events, selected_currency)
         
-        for year in projection_years:
-            # Apply all events up to this year
-            year_monthly_expenses = monthly_expenses
-            year_monthly_mortgage = calculated_payment
-            year_monthly_rental = 0
-            year_passive_income_annual = 0
-            event_notes = []
-            
-            # Calculate passive income for this year
-            if st.session_state.get('authenticated', False):
-                from database import get_user_passive_income_streams
-                passive_streams = get_user_passive_income_streams(st.session_state.user_id)
-                
-                for stream in passive_streams:
-                    if stream.start_year <= year and (stream.end_year is None or year <= stream.end_year):
-                        years_active = year - stream.start_year
-                        growth_factor = (1 + stream.annual_growth_rate) ** years_active
-                        stream_annual_amount = from_base_currency(stream.monthly_amount * 12 * growth_factor, selected_currency)
-                        
-                        # Apply tax if applicable
-                        if stream.is_taxable:
-                            tax_rate = stream.tax_rate if stream.tax_rate is not None else effective_tax_rate
-                            stream_annual_amount *= (1 - tax_rate)
-                        
-                        year_passive_income_annual += stream_annual_amount
-            
-            # Convert events from base to display currency for this calculation
-            display_events = convert_events_from_base(base_events, selected_currency)
-            
-            for event in display_events:
-                if event['year'] <= year:
-                    if event['type'] == 'property_purchase':
-                        year_monthly_mortgage = event['new_mortgage_payment']
-                        if event['year'] == year:
-                            event_notes.append(f"🏠 {event['name']}")
-                    elif event['type'] == 'property_sale':
-                        year_monthly_mortgage = 0
-                        if event['year'] == year:
-                            event_notes.append(f"💰 {event['name']}")
-                    elif event['type'] == 'expense_change':
-                        year_monthly_expenses += event['monthly_change']
-                        if event['year'] == year:
-                            event_notes.append(f"📊 {event['name']}")
-                    elif event['type'] == 'rental_income':
-                        year_monthly_rental += event['monthly_rental']
-                        if event['year'] == year:
-                            event_notes.append(f"🏘️ {event['name']}")
-                    elif event['type'] == 'one_time_expense' and event['year'] == year:
-                        event_notes.append(f"💸 {event['name']}")
-                    elif event['type'] == 'windfall' and event['year'] == year:
-                        event_notes.append(f"💵 {event['name']}")
-            
-            # Calculate cash flow (with salary inflation)
-            cumulative_salary_growth = (1 + salary_inflation) ** year
-            current_age_projection = starting_age + year
-            is_retired_projection = current_age_projection > retirement_age
-            
-            # Primary income
-            if not is_retired_projection:
-                year_income = gross_annual_income * cumulative_salary_growth
-                year_pension = year_income * pension_contribution_rate
-                year_tax = year_income * effective_tax_rate
-                year_takehome = year_income - year_pension - year_tax
-            else:
-                # Use pension income from pension planner if available
-                if use_pension_data:
-                    year_takehome = total_pension_income
-                else:
-                    year_takehome = 0
-                year_pension = 0
-                year_tax = 0
-            
-            # Spouse income (if enabled)
-            spouse_takehome = 0
-            if include_spouse and spouse_annual_income > 0:
-                spouse_current_age = spouse_age + year
-                spouse_is_retired_projection = spouse_current_age > spouse_retirement_age
-                
-                if not spouse_is_retired_projection:
-                    spouse_income = spouse_annual_income * cumulative_salary_growth
-                    spouse_pension = spouse_income * pension_contribution_rate
-                    spouse_tax = spouse_income * effective_tax_rate
-                    spouse_takehome = spouse_income - spouse_pension - spouse_tax
-                # Note: spouse pension income will be added when pension planner is integrated
-            
-            # Total household income
-            total_household_takehome = year_takehome + spouse_takehome
-            year_rental_annual = year_monthly_rental * 12
-            year_expenses_annual = year_monthly_expenses * 12
-            year_mortgage_annual = year_monthly_mortgage * 12
-            year_available = total_household_takehome + year_rental_annual + year_passive_income_annual - year_expenses_annual - year_mortgage_annual
-            
-            projection_row = {
-                'Year': year,
-                'Age': starting_age + year,
-                'Take Home': format_currency(year_takehome, selected_currency),
+        # Prepare spouse parameters
+        spouse_params = None
+        if include_spouse and spouse_annual_income > 0:
+            spouse_params = {
+                'gross_income': spouse_annual_income,
+                'retirement_age': spouse_retirement_age,
+                'tax_rate': effective_tax_rate,  # Using same tax rate for simplicity
+                'pension_rate': pension_contribution_rate,
+                'pension_income': 0  # TODO: Add spouse pension income from planner
             }
-            
-            # Add spouse income column if enabled
-            if include_spouse:
-                projection_row['Spouse Income'] = format_currency(spouse_takehome, selected_currency) if spouse_takehome > 0 else "-"
-            
-            projection_row.update({
-                'Rental Income': format_currency(year_rental_annual, selected_currency) if year_rental_annual > 0 else "-",
-                'Passive Income': format_currency(year_passive_income_annual, selected_currency) if year_passive_income_annual > 0 else "-",
-                'Living Expenses': format_currency(year_expenses_annual, selected_currency),
-                'Mortgage': format_currency(year_mortgage_annual, selected_currency) if year_mortgage_annual > 0 else "-",
-                'Available Savings': format_currency(year_available, selected_currency),
-                'Monthly Savings': format_currency(year_available/12, selected_currency),
-                'Events This Year': ', '.join(event_notes) if event_notes else '-'
-            })
-            
-            cashflow_projection.append(projection_row)
         
-        projection_df = pd.DataFrame(cashflow_projection)
+        # Currency formatter
+        currency_formatter = lambda x: format_currency(x, selected_currency)
+        
+        # Build projection using service
+        projection_df = build_cashflow_projection(
+            starting_age=starting_age,
+            retirement_age=retirement_age,
+            simulation_years=simulation_years,
+            gross_annual_income=gross_annual_income,
+            effective_tax_rate=effective_tax_rate,
+            pension_contribution_rate=pension_contribution_rate,
+            monthly_expenses=monthly_expenses,
+            monthly_mortgage_payment=calculated_payment,
+            salary_inflation=salary_inflation,
+            total_pension_income=total_pension_income if use_pension_data else 0,
+            events=display_events,
+            passive_income_streams=passive_streams_for_projection,
+            include_spouse=include_spouse,
+            spouse_params=spouse_params,
+            currency_formatter=currency_formatter,
+            max_years=30
+        )
+        
+        # Add Monthly Savings column
+        # Extract numeric values from Available Savings column for calculation
+        def extract_numeric(val_str):
+            """Extract numeric value from formatted currency string"""
+            if val_str == '-' or val_str == '':
+                return 0
+            # Remove currency symbols and commas
+            import re
+            numeric_str = re.sub(r'[^\d.-]', '', val_str)
+            try:
+                return float(numeric_str)
+            except:
+                return 0
+        
+        projection_df['Monthly Savings'] = projection_df['Available Savings'].apply(
+            lambda x: format_currency(extract_numeric(x) / 12, selected_currency)
+        )
         
         # Style the dataframe to highlight negative values
         def highlight_negative(val):
@@ -2802,7 +2309,7 @@ with tab1:
         )
         
         st.caption("💡 Take-home income grows with salary inflation. Expenses and mortgage shown in nominal dollars (not inflation-adjusted).")
-        st.caption("📝 Events: 🏠 Property Purchase, 💰 Property Sale, 📊 Expense Change, 🏘️ Rental Income, 💸 One-Time Expense, 💵 Windfall")
+        st.caption("📝 Events: Events This Year column shows all financial events occurring in that projection year.")
         
         # Net Worth by Age Milestones
         st.markdown("---")
@@ -2833,42 +2340,13 @@ with tab1:
         st.markdown("---")
         st.subheader("Wealth Distribution at Key Milestones")
         
-        milestone_years_dist = [y for y in [5, 10, 15, 20, 25, 30] if y <= simulation_years]
-        
-        if len(milestone_years_dist) >= 3:
-            n_rows = 2
-            n_cols = 3
-        elif len(milestone_years_dist) >= 2:
-            n_rows = 1
-            n_cols = len(milestone_years_dist)
-        else:
-            n_rows = 1
-            n_cols = 1
-        
-        fig_dist = make_subplots(
-            rows=n_rows, cols=n_cols,
-            subplot_titles=[f"Year {y} (Age {starting_age + y})" for y in milestone_years_dist[:n_rows*n_cols]]
+        # Create distribution chart using visualization service
+        fig_dist = create_distribution_chart(
+            paths_to_plot=paths_to_plot,
+            simulation_years=simulation_years,
+            starting_age=starting_age,
+            currency_symbol=currency_symbol
         )
-        
-        for idx, year in enumerate(milestone_years_dist[:n_rows*n_cols]):
-            row = idx // n_cols + 1
-            col = idx % n_cols + 1
-            
-            if year < paths_to_plot.shape[1]:
-                fig_dist.add_trace(
-                    go.Histogram(
-                        x=paths_to_plot[:, year],
-                        nbinsx=50,
-                        name=f"Year {year}",
-                        showlegend=False,
-                        marker_color='rgba(31, 119, 180, 0.7)'
-                    ),
-                    row=row, col=col
-                )
-        
-        fig_dist.update_layout(height=400 if n_rows == 1 else 600, showlegend=False)
-        fig_dist.update_xaxes(tickprefix=currency_symbol, tickformat=",.0f")
-        fig_dist.update_yaxes(title_text="Frequency")
         
         st.plotly_chart(fig_dist, use_container_width=True)
 

@@ -11,10 +11,11 @@ env/
 *.db
 *.db-journal
 finsim.db
-docs/
-view_database.py
-exports
-test
+
+# Local development output
+exports/
+*.csv
+*.pdf
 
 # Environment
 .env
