@@ -39,12 +39,12 @@ No action needed - already done!
     with st.expander("Copy these imports"):
         st.code("""
 # Add after existing imports (around line 20)
-from performance_utils import (
+from services.performance_utils import (
     cache_simulation_results,
     get_cached_exchange_rates,
     clear_simulation_cache
 )
-from ui_enhancements import (
+from services.ui_enhancements import (
     inject_custom_css,
     add_meta_tags,
     show_welcome_tour,
