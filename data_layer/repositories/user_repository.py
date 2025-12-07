@@ -58,7 +58,7 @@ class UserRepository:
             current_age: User's current age
             target_retirement_age: Target retirement age
             country: Optional country
-            data_sharing_consent: Data sharing consent
+            data_sharing_consent: Data sharing consent (not currently stored)
         
         Returns:
             Created User object
@@ -66,11 +66,10 @@ class UserRepository:
         user = User(
             username=username,
             email=email,
-            hashed_password=hashed_password,
+            password_hash=hashed_password,
             current_age=current_age,
             target_retirement_age=target_retirement_age,
             country=country,
-            data_sharing_consent=data_sharing_consent,
             email_verified=False  # Requires verification
         )
         
