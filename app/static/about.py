@@ -9,7 +9,7 @@ def show_about():
         padding: 2rem;
     }
     .hero-section {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #2B3447 0%, #2B3447 100%);
         color: white;
         padding: 3rem;
         border-radius: 10px;
