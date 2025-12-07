@@ -18,9 +18,9 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.schema import CreateTable
 
 # Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from database import DATABASE_URL, Base, User, Simulation, SavedBudget, UsageStats
+from data_layer.database import DATABASE_URL, Base, User, Simulation, SavedBudget, UsageStats
 
 
 def get_model_columns(model):

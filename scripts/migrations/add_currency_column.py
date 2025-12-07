@@ -11,9 +11,9 @@ import sys
 from sqlalchemy import create_engine, text, inspect
 
 # Add parent directory to path to import database module
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from database import DATABASE_URL
+from data_layer.database import DATABASE_URL
 
 
 def check_column_exists(engine, table_name, column_name):

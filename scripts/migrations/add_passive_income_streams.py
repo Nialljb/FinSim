@@ -4,9 +4,9 @@ Migration: Add passive_income_streams table
 
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from database import engine, Base, PassiveIncomeStream
+from data_layer.database import engine, Base, PassiveIncomeStream
 
 def upgrade():
     """Add passive_income_streams table"""
