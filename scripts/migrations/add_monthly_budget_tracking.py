@@ -4,10 +4,10 @@ Migration: Add monthly budget tracking fields to saved_budgets table
 
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from sqlalchemy import text
-from database import engine
+from data_layer.database import engine
 
 def upgrade():
     """Add new columns for monthly tracking"""

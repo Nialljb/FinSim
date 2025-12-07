@@ -4,10 +4,10 @@ Migration: Add spouse/partner fields to users and pension_plans tables
 
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from sqlalchemy import text
-from database import engine
+from data_layer.database import engine
 
 def upgrade():
     """Add spouse fields to users and pension_plans tables"""
