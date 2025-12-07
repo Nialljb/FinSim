@@ -105,7 +105,7 @@ def show_landing_page():
         .hero {
             text-align: center;
             padding: 3rem 1rem;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #2B3447 0%, #2B3447 100%);
             color: white;
             border-radius: 10px;
             margin-bottom: 2rem;
@@ -129,11 +129,11 @@ def show_landing_page():
             padding: 1.5rem;
             border-radius: 8px;
             margin-bottom: 1rem;
-            border-left: 4px solid #667eea;
+            border-left: 4px solid #2B3447;
         }
         
         .feature-box h3 {
-            color: #667eea;
+            color: #2B3447;
             margin-bottom: 0.5rem;
         }
         
@@ -154,7 +154,7 @@ def show_landing_page():
         .stat-number {
             font-size: 2.5rem;
             font-weight: bold;
-            color: #667eea;
+            color: #2B3447;
         }
         
         .stat-label {
@@ -167,8 +167,9 @@ def show_landing_page():
             width: 100%;
             border-radius: 8px;
             padding: 0.75rem 1.5rem;
-            font-size: 1rem;
+            font-size: 2rem;
             font-weight: 600;
+            background-color: #D8DFE8;
             transition: all 0.3s ease;
         }
             font-weight: 600;
@@ -186,7 +187,7 @@ def show_landing_page():
         
         .testimonial-author {
             font-weight: bold;
-            color: #667eea;
+            color: #2B3447;
             margin-top: 0.5rem;
             font-style: normal;
         }
@@ -196,7 +197,7 @@ def show_landing_page():
     # Hero Section
     st.markdown("""
         <div class="hero">
-            <h1>🐬 FinSTK</h1>
+            <h1> FinSTK </h1>
             <p>Plan Your Financial Future with The Financial Simulation Toolkit</p>
             <p style="font-size: 1rem; opacity: 0.9;">
                 Monte Carlo simulations • Retirement planning • Real estate modeling • Life event forecasting
@@ -231,11 +232,11 @@ def show_landing_page():
     # Quick info links
     link_col1, link_col2 = st.columns(2)
     with link_col1:
-        if st.button("📚 Documentation & User Guide", key="nav_docs", use_container_width=True, type="secondary"):
+        if st.button(" Documentation & User Guide", key="nav_docs", use_container_width=True, type="secondary"):
             st.query_params['page'] = 'docs'
             st.rerun()
     with link_col2:
-        if st.button("ℹ️ About FinSim", key="nav_about", use_container_width=True, type="secondary"):
+        if st.button(" About FinSim", key="nav_about", use_container_width=True, type="secondary"):
             st.query_params['page'] = 'about'
             st.rerun()
     
@@ -393,20 +394,20 @@ def show_landing_page():
     
     # How It Works Section
     st.markdown("---")
-    st.markdown("### 🎯 How It Works")
+    st.markdown("### How It Works")
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.markdown("#### 1️⃣ Enter Your Info")
+        st.markdown("#### 1. Enter Your Info")
         st.write("Current wealth, income, expenses, and goals")
     
     with col2:
-        st.markdown("#### 2️⃣ Add Life Events")
+        st.markdown("#### 2. Add Life Events")
         st.write("Property purchases, children, career changes")
     
     with col3:
-        st.markdown("#### 3️⃣ Plan Your Financial Future")
+        st.markdown("#### 3. Plan Your Financial Future")
         st.write("View projections, percentiles, and export results")
     
     # Testimonials

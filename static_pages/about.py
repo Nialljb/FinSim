@@ -9,7 +9,7 @@ def show_about():
         padding: 2rem;
     }
     .hero-section {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #2B3447 0%, #667eea 100%);
         color: white;
         padding: 3rem;
         border-radius: 10px;
@@ -29,7 +29,7 @@ def show_about():
     # Hero
     st.markdown("""
     <div class="hero-section">
-        <h1>🐬 About FinSim</h1>
+        <h1> About Financial Simulator Toolkit</h1>
         <p style="font-size: 1.2rem;">Your Financial Future Planning Tool</p>
     </div>
     """, unsafe_allow_html=True)

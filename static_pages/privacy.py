@@ -11,7 +11,7 @@ max-width: 900px;
 margin: 0 auto;
 }
 .hero-section {
-background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+background: linear-gradient(135deg, #2B3447 0%, #667eea 100%);
 color: white;
 padding: 2rem;
 border-radius: 10px;
