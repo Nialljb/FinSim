@@ -5,7 +5,7 @@ Implements repository pattern for User model
 
 from typing import Optional, List
 from sqlalchemy.orm import Session
-from data.database import User
+from data_layer.database import User
 
 
 class UserRepository:
