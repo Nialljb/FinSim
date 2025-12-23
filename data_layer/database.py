@@ -346,6 +346,7 @@ class PensionPlan(Base):
     
     # Spouse/Partner pension planning
     spouse_enabled = Column(Boolean, default=False)
+    spouse_date_of_birth = Column(String(10), nullable=True)  # YYYY-MM-DD format
     spouse_age = Column(Integer, nullable=True)
     spouse_retirement_age = Column(Integer, nullable=True)
     spouse_annual_income = Column(Float, default=0)
