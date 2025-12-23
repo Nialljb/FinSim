@@ -25,7 +25,7 @@ services:
 databases:
   # PostgreSQL Database
   - name: finsim-db
-    plan: free  # Free tier: 1GB storage, expires after 90 days of inactivity
+    plan: standard #free  # Free tier: 1GB storage, expires after 90 days of inactivity
     # OR use 'standard' for $7/month: 10GB storage, no expiration
     databaseName: finsim
     # user: finsim_user  # Removed - let Render manage the user automatically

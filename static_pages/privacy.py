@@ -219,7 +219,7 @@ use, and protect your personal and financial information.</p>
 <li><strong>View/Edit Data:</strong> Use the app interface</li>
 <li><strong>Export Data:</strong> Use the PDF/Excel export buttons</li>
 <li><strong>Delete Account:</strong> Contact us (see Contact page)</li>
-<li><strong>Questions:</strong> Email privacy@finsim.com (placeholder)</li>
+<li><strong>Questions:</strong> Email niall@finsim.com (placeholder)</li>
 </ul>
 </div>
     """, unsafe_allow_html=True)
@@ -291,7 +291,7 @@ with an updated "Last Updated" date. Major changes will be communicated via:</p>
 <h2>11. Contact Us</h2>
 <p>Questions about this Privacy Policy or your data?</p>
 <ul>
-<li><strong>Email:</strong> privacy@finsim.com (placeholder - update with real contact)</li>
+<li><strong>Email:</strong> niall@finsim.com (placeholder - update with real contact)</li>
 <li><strong>Contact Form:</strong> <a href="?page=contact">Contact Page</a></li>
 </ul>
 </div>
