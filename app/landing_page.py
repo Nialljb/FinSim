@@ -269,6 +269,7 @@ def show_landing_page():
                             st.session_state.user_email = user_data['email']
                             st.session_state.current_age = user_data['current_age']
                             st.session_state.target_retirement_age = user_data['target_retirement_age']
+                            st.session_state.preferred_currency = user_data.get('preferred_currency', 'EUR')
                             st.success(message)
                             st.rerun()
                         else:
