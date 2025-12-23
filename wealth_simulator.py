@@ -1781,7 +1781,7 @@ with tab1:
         st.sidebar.success(message)
 
     # RUN SIMULATION BUTTON
-    if st.sidebar.button("🚀 Run Simulation", type="primary", disabled=not can_simulate, use_container_width=True):
+    if st.sidebar.button(" Run Simulation", type="primary", disabled=not can_simulate, use_container_width=True):
         # Clear loaded simulation indicator when running a new simulation
         if 'loaded_simulation_name' in st.session_state:
             del st.session_state.loaded_simulation_name

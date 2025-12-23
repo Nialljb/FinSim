@@ -180,7 +180,7 @@ def show_contact():
         
         with st.expander("🗑️ How do I delete my account?"):
             st.write("""
-            Email us at privacy@finsim.com (placeholder) with your username and we'll permanently 
+            Email us at niall@finsim.com with your username and we'll permanently 
             delete your account and data within 30 days.
             """)
 
@@ -206,16 +206,17 @@ def show_contact():
         with st.expander("💼 Can I use FinSim for business?"):
             st.write("""
             FinSim is designed for personal financial planning. Commercial use requires permission. 
-            Contact us at info@finsim.com (placeholder) for licensing inquiries.
+            Contact us at niall@finsim.com (placeholder) for licensing inquiries.
             """)
 
     # Social Links (Placeholder)
+    # <a href="https://github.com/Nialljb?tab=repositories" style="color: #667eea; text-decoration: none; margin: 0 1rem;">GitHub</a> • 
+
     st.markdown("---")
     st.markdown("""
     <div style="text-align: center; padding: 1rem 0;">
         <h3>🌐 Connect With Us</h3>
         <p>
-            <a href="https://github.com/Nialljb?tab=repositories" style="color: #667eea; text-decoration: none; margin: 0 1rem;">GitHub</a> • 
             <a href="https://www.linkedin.com/in/niall-bourke-phd-53003640/" style="color: #667eea; text-decoration: none; margin: 0 1rem;">LinkedIn</a>
         </p>
     </div>
