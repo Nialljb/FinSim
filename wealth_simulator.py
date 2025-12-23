@@ -1964,12 +1964,13 @@ with tab1:
         # Key metrics
         st.subheader("Key Statistics")
         
-        net_worth_paths = display_results['net_worth']  # Always use display currency
-        # Convert results to display currency
-
-        # NOW USE display_results INSTEAD OF results
-        final_net_worth = display_results['net_worth'][:, -1]
-        initial_net_worth = display_results['net_worth'][:, 0]
+        # Use the same paths that are shown in the chart (respecting show_real toggle)
+        net_worth_paths = paths_to_plot if view_type == "Total Net Worth" else (
+            display_results['real_net_worth'] if show_real else display_results['net_worth']
+        )
+        
+        final_net_worth = net_worth_paths[:, -1]
+        initial_net_worth = net_worth_paths[:, 0]
 
         col1, col2, col3, col4 = st.columns(4)
 
