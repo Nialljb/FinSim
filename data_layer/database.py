@@ -57,6 +57,7 @@ class User(Base):
     # Relationships
     simulations = relationship("Simulation", back_populates="user", cascade="all, delete-orphan")
     passive_income_streams = relationship("PassiveIncomeStream", back_populates="user", cascade="all, delete-orphan")
+    debts = relationship("Debt", backref="user", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<User(username='{self.username}', email='{self.email}')>"
@@ -400,6 +401,55 @@ class PensionPlan(Base):
         return f"<PensionPlan(id={self.id}, user_id={self.user_id}, name='{self.name}')>"
 
 
+class Debt(Base):
+    """User debt tracking and management"""
+    __tablename__ = "debts"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    
+    # Debt details
+    name = Column(String(255), nullable=False)  # e.g., "Student Loan", "Credit Card"
+    debt_type = Column(String(50), nullable=False)  # 'student_loan', 'mortgage', 'personal_loan', 'credit_card', 'other'
+    
+    # Financial details (stored in base currency - EUR)
+    principal_amount = Column(Float, default=0)  # Original loan amount
+    current_balance = Column(Float, default=0)  # Current outstanding balance
+    interest_rate = Column(Float, default=0)  # Annual interest rate (as decimal, e.g., 0.05 for 5%)
+    
+    # Repayment details
+    monthly_payment = Column(Float, default=0)  # Minimum monthly payment
+    minimum_payment = Column(Float, default=0)  # Minimum payment for credit cards
+    term_months = Column(Integer, nullable=True)  # Original loan term in months
+    remaining_months = Column(Integer, nullable=True)  # Remaining months
+    start_date = Column(String(10), nullable=True)  # YYYY-MM-DD format
+    
+    # Mortgage-specific fields
+    property_value = Column(Float, nullable=True)  # Associated property value
+    down_payment = Column(Float, nullable=True)  # Original down payment
+    
+    # Extra payment tracking
+    allows_extra_payments = Column(Boolean, default=True)
+    extra_payment_amount = Column(Float, default=0)  # Regular extra payment amount
+    
+    # Credit card specific
+    credit_limit = Column(Float, nullable=True)  # For credit cards
+    
+    # Metadata
+    lender = Column(String(255), nullable=True)
+    notes = Column(Text, nullable=True)
+    
+    # Status
+    is_active = Column(Boolean, default=True)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    def __repr__(self):
+        return f"<Debt(id={self.id}, name='{self.name}', type='{self.debt_type}', balance={self.current_balance})>"
+
+
 def init_db():
     """Initialize database - create all tables"""
     Base.metadata.create_all(bind=engine)
@@ -738,6 +788,95 @@ def delete_passive_income_stream(stream_id, user_id):
             return True, "Stream deleted"
         else:
             return False, "Stream not found"
+    except Exception as e:
+        db.rollback()
+        return False, str(e)
+    finally:
+        db.close()
+
+
+# ============================================================================
+# DEBT MANAGEMENT FUNCTIONS
+# ============================================================================
+
+def get_user_debts(user_id):
+    """Get all active debts for a user"""
+    db = SessionLocal()
+    try:
+        debts = db.query(Debt).filter(
+            Debt.user_id == user_id,
+            Debt.is_active == True
+        ).all()
+        return debts
+    finally:
+        db.close()
+
+
+def create_debt(user_id, name, debt_type, current_balance, interest_rate, monthly_payment, **kwargs):
+    """Create a new debt entry"""
+    db = SessionLocal()
+    try:
+        debt = Debt(
+            user_id=user_id,
+            name=name,
+            debt_type=debt_type,
+            current_balance=current_balance,
+            principal_amount=kwargs.get('principal_amount', current_balance),
+            interest_rate=interest_rate,
+            monthly_payment=monthly_payment,
+            **{k: v for k, v in kwargs.items() if k != 'principal_amount' and hasattr(Debt, k)}
+        )
+        db.add(debt)
+        db.commit()
+        db.refresh(debt)
+        return True, debt
+    except Exception as e:
+        db.rollback()
+        return False, str(e)
+    finally:
+        db.close()
+
+
+def update_debt(debt_id, user_id, **kwargs):
+    """Update a debt entry"""
+    db = SessionLocal()
+    try:
+        debt = db.query(Debt).filter(
+            Debt.id == debt_id,
+            Debt.user_id == user_id,
+            Debt.is_active == True
+        ).first()
+        
+        if debt:
+            for key, value in kwargs.items():
+                if hasattr(debt, key):
+                    setattr(debt, key, value)
+            db.commit()
+            return True, "Debt updated"
+        else:
+            return False, "Debt not found"
+    except Exception as e:
+        db.rollback()
+        return False, str(e)
+    finally:
+        db.close()
+
+
+def delete_debt(debt_id, user_id):
+    """Soft delete a debt"""
+    db = SessionLocal()
+    try:
+        debt = db.query(Debt).filter(
+            Debt.id == debt_id,
+            Debt.user_id == user_id
+        ).first()
+        
+        if debt:
+            debt.is_active = False
+            db.commit()
+            return True, "Debt deleted"
+        else:
+            return False, "Debt not found"
     except Exception as e:
         db.rollback()
         return False, str(e)

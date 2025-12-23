@@ -647,7 +647,7 @@ if 'active_tab' not in st.session_state:
 
 # Create tabs - note: we can't programmatically select, but we can reorder content
 # Workaround: Use radio buttons styled as tabs or show info message
-tab1, tab2, tab3 = st.tabs(["🎲 Simulation", "💰 Budget Builder", "🎯 Pension Planner"])
+tab1, tab2, tab3, tab4 = st.tabs(["🎲 Simulation", "💰 Budget Builder", "🎯 Pension Planner", "💳 Debt Manager"])
 
 # Show message if user just came from budget builder
 if st.session_state.get('just_set_budget', False):
@@ -664,6 +664,13 @@ with tab3:
         show_pension_planner_tab(st.session_state.user_id)
     else:
         st.warning("Please log in to use the Pension Planner")
+
+with tab4:
+    from app.pages.debt_manager import show_debt_manager
+    if st.session_state.get('authenticated', False):
+        show_debt_manager(st.session_state.user_id)
+    else:
+        st.warning("Please log in to use the Debt Manager")
 
 with tab1:
     # Initialize session state for budget integration
