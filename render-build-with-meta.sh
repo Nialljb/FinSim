@@ -7,6 +7,9 @@ pip install -r requirements.txt
 echo "Running database migrations..."
 python scripts/migrations/migrate_postgres_budget_columns.py
 python scripts/migrations/migrate_email_verification.py
+python db/migrations/add_preferred_currency.py
+python db/migrations/add_spouse_date_of_birth.py
+python db/migrations/add_debts_table.py
 
 echo "Modifying Streamlit to inject custom meta tags..."
 
