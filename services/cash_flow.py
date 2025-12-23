@@ -440,11 +440,27 @@ def build_cashflow_projection(
             year_annual_mortgage
         )
         
+        # Calculate pension contributions for display
+        primary_pension_contrib = 0
+        spouse_pension_contrib = 0
+        
+        if not is_retired:
+            # Calculate inflated salary for current year
+            primary_salary = gross_annual_income * ((1 + salary_inflation) ** year)
+            primary_pension_contrib = primary_salary * pension_contribution_rate
+        
+        if include_spouse and not spouse_retired:
+            spouse_salary = spouse_params.get('gross_income', 0) * ((1 + salary_inflation) ** year)
+            spouse_pension_contrib = spouse_salary * spouse_params.get('pension_rate', 0)
+        
+        total_pension_contrib = primary_pension_contrib + spouse_pension_contrib
+        
         # Build projection row
         projection_row = {
             'Year': year,
             'Age': starting_age + year,
             'Take Home': currency_formatter(total_income),
+            'Pension Contrib': currency_formatter(total_pension_contrib),
             'Passive Income': currency_formatter(year_passive_income_annual),
             'Rental Income': currency_formatter(year_annual_rental),
             'Living Expenses': currency_formatter(year_annual_expenses),

@@ -703,6 +703,150 @@ with tab1:
     # Show loaded simulation indicator
     if st.session_state.get('loaded_simulation_name'):
         st.info(f"📂 Currently viewing: **{st.session_state.loaded_simulation_name}**")
+    
+    # Preset Scenarios
+    with st.expander("🎭 Load Example Scenarios", expanded=False):
+        st.markdown("""
+        Quick-start with realistic scenarios based on UK demographics and living costs.
+        All amounts in GBP unless otherwise noted.
+        """)
+        
+        preset_scenarios = {
+            "🏙️ London Single Professional (30s)": {
+                "description": "30-year-old professional working in London, renting",
+                "currency": "GBP",
+                "starting_age": 30,
+                "retirement_age": 67,
+                "initial_liquid_wealth": 15000,  # Some savings
+                "initial_property_value": 0,
+                "initial_mortgage": 0,
+                "gross_annual_income": 45000,  # Median London salary
+                "monthly_expenses": 2200,  # Rent £1400 + living £800
+                "effective_tax_rate": 0.23,
+                "pension_contribution_rate": 0.08,
+            },
+            "🏘️ UK Regional Single (30s)": {
+                "description": "30-year-old professional in regional UK city, renting",
+                "currency": "GBP",
+                "starting_age": 30,
+                "retirement_age": 67,
+                "initial_liquid_wealth": 10000,
+                "initial_property_value": 0,
+                "initial_mortgage": 0,
+                "gross_annual_income": 32000,  # UK median
+                "monthly_expenses": 1500,  # Rent £850 + living £650
+                "effective_tax_rate": 0.20,
+                "pension_contribution_rate": 0.08,
+            },
+            "🏡 UK First-Time Buyer (35)": {
+                "description": "35-year-old homeowner, purchased first property",
+                "currency": "GBP",
+                "starting_age": 35,
+                "retirement_age": 67,
+                "initial_liquid_wealth": 5000,  # Post-purchase savings
+                "initial_property_value": 280000,  # Average UK house
+                "initial_mortgage": 252000,  # 10% deposit
+                "gross_annual_income": 38000,
+                "monthly_expenses": 1800,  # No rent, but other costs
+                "effective_tax_rate": 0.22,
+                "pension_contribution_rate": 0.10,
+            },
+            "👫 London Couple DINK (30s)": {
+                "description": "Dual-income couple in London, no kids, renting",
+                "currency": "GBP",
+                "starting_age": 32,
+                "retirement_age": 67,
+                "initial_liquid_wealth": 40000,
+                "initial_property_value": 0,
+                "initial_mortgage": 0,
+                "gross_annual_income": 50000,  # Per person (100k household)
+                "monthly_expenses": 2800,  # Rent £2000 + living £800 per person
+                "effective_tax_rate": 0.27,
+                "pension_contribution_rate": 0.12,
+                "has_spouse": True,
+                "spouse_age": 31,
+                "spouse_retirement_age": 67,
+                "spouse_annual_income": 50000,
+            },
+            "💼 Senior Professional London (45)": {
+                "description": "45-year-old senior professional, homeowner in London",
+                "currency": "GBP",
+                "starting_age": 45,
+                "retirement_age": 65,
+                "initial_liquid_wealth": 80000,
+                "initial_property_value": 550000,
+                "initial_mortgage": 300000,  # Upgraded property
+                "gross_annual_income": 75000,
+                "monthly_expenses": 3200,
+                "effective_tax_rate": 0.32,
+                "pension_contribution_rate": 0.15,
+            },
+            "🎓 Recent Graduate (25)": {
+                "description": "25-year-old graduate in first job, renting, with student debt",
+                "currency": "GBP",
+                "starting_age": 25,
+                "retirement_age": 68,
+                "initial_liquid_wealth": 2000,
+                "initial_property_value": 0,
+                "initial_mortgage": 0,
+                "gross_annual_income": 28000,  # Graduate starting salary
+                "monthly_expenses": 1400,  # Rent £800 + living £600
+                "effective_tax_rate": 0.18,
+                "pension_contribution_rate": 0.05,
+            },
+        }
+        
+        col1, col2 = st.columns([3, 1])
+        
+        with col1:
+            selected_preset = st.selectbox(
+                "Choose a scenario",
+                options=[""] + list(preset_scenarios.keys()),
+                format_func=lambda x: x if x else "-- Select a scenario --"
+            )
+        
+        with col2:
+            load_btn = st.button("📥 Load Scenario", type="primary", disabled=not selected_preset, use_container_width=True)
+        
+        if selected_preset:
+            scenario = preset_scenarios[selected_preset]
+            st.info(f"**{selected_preset}**\n\n{scenario['description']}")
+        
+        if load_btn and selected_preset:
+            scenario = preset_scenarios[selected_preset]
+            
+            # Convert to base currency (EUR) for storage
+            currency = scenario['currency']
+            
+            st.session_state.selected_currency = currency
+            st.session_state.base_liquid_wealth = to_base_currency(scenario['initial_liquid_wealth'], currency)
+            st.session_state.base_property_value = to_base_currency(scenario['initial_property_value'], currency)
+            st.session_state.base_mortgage = to_base_currency(scenario['initial_mortgage'], currency)
+            st.session_state.base_annual_income = to_base_currency(scenario['gross_annual_income'], currency)
+            st.session_state.base_monthly_expenses = to_base_currency(scenario['monthly_expenses'], currency)
+            
+            # Set ages
+            if 'starting_age' in scenario:
+                st.session_state.preset_starting_age = scenario['starting_age']
+            if 'retirement_age' in scenario:
+                st.session_state.preset_retirement_age = scenario['retirement_age']
+            
+            # Set spouse data if applicable
+            if scenario.get('has_spouse', False):
+                st.session_state.has_spouse = True
+                st.session_state.spouse_age = scenario.get('spouse_age', scenario['starting_age'])
+                st.session_state.spouse_retirement_age = scenario.get('spouse_retirement_age', scenario['retirement_age'])
+                st.session_state.spouse_annual_income = scenario.get('spouse_annual_income', 0)
+                st.session_state.base_spouse_annual_income = to_base_currency(scenario.get('spouse_annual_income', 0), currency)
+            else:
+                st.session_state.has_spouse = False
+            
+            # Store preset rates for sidebar defaults
+            st.session_state.preset_tax_rate = scenario.get('effective_tax_rate', 0.25)
+            st.session_state.preset_pension_rate = scenario.get('pension_contribution_rate', 0.10)
+            
+            st.success(f"✅ Loaded scenario: {selected_preset}")
+            st.rerun()
 
     # Save/Load Simulation Controls
     if st.session_state.get('authenticated', False):
@@ -889,9 +1033,20 @@ with tab1:
 
     st.sidebar.header("⚙️ Settings")
     
-    # Age settings
-    if st.session_state.get('authenticated', False):
+    # Age settings - use preset if available
+    if st.session_state.get('preset_starting_age'):
+        default_current_age = st.session_state.preset_starting_age
+        # Clear preset after using it once
+        del st.session_state.preset_starting_age
+    elif st.session_state.get('authenticated', False):
         default_current_age = st.session_state.get('current_age', 30)
+    else:
+        default_current_age = 30
+    
+    if st.session_state.get('preset_retirement_age'):
+        default_retirement_age = st.session_state.preset_retirement_age
+        del st.session_state.preset_retirement_age
+    elif st.session_state.get('authenticated', False):
         default_retirement_age = st.session_state.get('target_retirement_age', 65)
     else:
         default_current_age = 30
@@ -1158,20 +1313,29 @@ with tab1:
         selected_currency
     )
 
+    # Use preset tax rate if available, otherwise default
+    default_tax_rate = st.session_state.get('preset_tax_rate', 0.25)
+    if 'preset_tax_rate' in st.session_state:
+        del st.session_state.preset_tax_rate  # Clear after using
 
     effective_tax_rate = st.sidebar.slider(
         "Effective Tax Rate (%)",
         min_value=0.0,
         max_value=50.0,
-        value=25.0,
+        value=float(default_tax_rate * 100),
         step=1.0
     ) / 100
+
+    # Use preset pension rate if available, otherwise default
+    default_pension_rate = st.session_state.get('preset_pension_rate', 0.10)
+    if 'preset_pension_rate' in st.session_state:
+        del st.session_state.preset_pension_rate  # Clear after using
 
     pension_contribution_rate = st.sidebar.slider(
         "Pension Contribution (% of gross)",
         min_value=0.0,
         max_value=30.0,
-        value=10.0,
+        value=float(default_pension_rate * 100),
         step=1.0
     ) / 100
 
