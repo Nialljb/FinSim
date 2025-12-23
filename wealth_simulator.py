@@ -942,6 +942,13 @@ with tab1:
     # Currency Selector - SIMPLIFIED VERSION
     st.sidebar.header("💱 Currency")
 
+    # Get default currency from user preference or BASE_CURRENCY
+    if 'selected_currency' not in st.session_state:
+        if st.session_state.get('authenticated', False):
+            st.session_state.selected_currency = st.session_state.get('preferred_currency', BASE_CURRENCY)
+        else:
+            st.session_state.selected_currency = BASE_CURRENCY
+    
     previous_currency = st.session_state.get('selected_currency', BASE_CURRENCY)
 
     selected_currency = st.sidebar.selectbox(
@@ -960,6 +967,21 @@ with tab1:
         old_keys = [k for k in st.session_state.keys() if k.startswith('manual_') and not k.endswith(f'_{selected_currency}')]
         for key in old_keys:
             del st.session_state[key]
+        
+        # Save currency preference to database if authenticated
+        if st.session_state.get('authenticated', False):
+            from data_layer.database import SessionLocal, User
+            db = SessionLocal()
+            try:
+                user = db.query(User).filter(User.id == st.session_state.user_id).first()
+                if user:
+                    user.preferred_currency = selected_currency
+                    db.commit()
+                    st.session_state.preferred_currency = selected_currency
+            except Exception as e:
+                db.rollback()
+            finally:
+                db.close()
 
     st.session_state.selected_currency = selected_currency
     currency_symbol = CURRENCIES[selected_currency]['symbol']

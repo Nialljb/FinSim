@@ -136,6 +136,7 @@ def login_user(username_or_email: str, password: str):
             'current_age': user.current_age,
             'target_retirement_age': user.target_retirement_age,
             'country': user.country,
+            'preferred_currency': user.preferred_currency or 'EUR',
             'last_login': user.last_login
         }
         

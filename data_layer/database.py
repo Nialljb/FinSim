@@ -38,6 +38,7 @@ class User(Base):
     current_age = Column(Integer, nullable=True)
     target_retirement_age = Column(Integer, nullable=True)
     country = Column(String(100), nullable=True)
+    preferred_currency = Column(String(10), default='EUR', nullable=True)
     
     # Spouse/partner data
     has_spouse = Column(Boolean, default=False)
