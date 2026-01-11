@@ -31,6 +31,20 @@ BASE_URL = os.getenv("BASE_URL", "http://localhost:8501")
 SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production")
 
 # ============================================================================
+# Auth0 Configuration
+# ============================================================================
+
+# Enable Auth0 (when False, uses traditional username/password auth)
+ENABLE_AUTH0 = os.getenv("ENABLE_AUTH0", "False").lower() == "true"
+
+# Auth0 Settings
+AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN", "")  # e.g., "your-tenant.us.auth0.com"
+AUTH0_CLIENT_ID = os.getenv("AUTH0_CLIENT_ID", "")
+AUTH0_CLIENT_SECRET = os.getenv("AUTH0_CLIENT_SECRET", "")
+AUTH0_CALLBACK_URL = os.getenv("AUTH0_CALLBACK_URL", f"{os.getenv('BASE_URL', 'http://localhost:8501')}/callback")
+AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE", "")  # Optional, for API access
+
+# ============================================================================
 # Feature Flags
 # ============================================================================
 

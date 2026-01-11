@@ -3,7 +3,11 @@ Professional Landing Page for FinSim with integrated static pages
 """
 
 import streamlit as st
-from authentication.auth import initialize_session_state, login_user, register_user, logout, request_password_reset
+from authentication.auth import (
+    initialize_session_state, login_user, register_user, logout, 
+    request_password_reset, is_auth0_enabled, get_auth0_client, 
+    login_with_auth0
+)
 
 
 def show_about_page():
@@ -29,6 +33,57 @@ def show_contact_page():
     from static_pages.contact import show_contact
     show_contact()
 
+def handle_auth0_callback_page(query_params):
+    """Handle Auth0 OAuth callback"""
+    st.markdown("### 🔐 Completing Sign In...")
+    
+    try:
+        code = query_params.get('code', [None])[0] if isinstance(query_params.get('code'), list) else query_params.get('code')
+        state = query_params.get('state', [None])[0] if isinstance(query_params.get('state'), list) else query_params.get('state')
+        
+        if not code or not state:
+            st.error("Invalid callback parameters")
+            if st.button("← Back to Login"):
+                st.query_params.clear()
+                st.rerun()
+            return
+        
+        # For Auth0, we validate the state on the server side during token exchange
+        # The state parameter itself serves as the CSRF token
+        st.info("Exchanging authorization code for tokens...")
+        
+        from authentication.auth0_integration import handle_auth0_callback
+        
+        # Pass state as expected_state - Auth0 validates it during the flow
+        success, message, user_data = handle_auth0_callback(code, state, state)
+        
+        if success and user_data:
+            # Set session state
+            login_with_auth0(user_data)
+            
+            st.success(f"✓ Welcome, {user_data['username']}!")
+            st.info("Click below to continue to the application")
+            
+            # Clear query params
+            st.query_params.clear()
+            
+            # Provide a button to continue instead of auto-redirect
+            if st.button("Continue to FinSim →", type="primary", use_container_width=True):
+                st.rerun()
+        else:
+            st.error(f"Authentication failed: {message}")
+            st.info("Please try again or contact support.")
+            
+            # Provide a link back to login
+            if st.button("← Back to Login"):
+                st.query_params.clear()
+                st.rerun()
+                
+    except Exception as e:
+        st.error(f"Error during authentication: {str(e)}")
+        if st.button("← Back to Login"):
+            st.query_params.clear()
+            st.rerun()
 
 def show_docs_page():
     """Documentation page content"""
@@ -41,15 +96,13 @@ def show_landing_page():
     Professional landing page with login and routing
     Combines marketing + authentication + static pages
     """
-    initialize_session_state()
-    
-    # If user is already authenticated, redirect to main app
+    # Check authentication BEFORE initializing (in case it's already set)
     if st.session_state.get('authenticated', False):
-        st.info("You are already logged in. Redirecting to app...")
-        import time
-        time.sleep(1)
-        st.rerun()
+        # User is authenticated - don't show landing page
         return
+    
+    # Only initialize if not authenticated
+    initialize_session_state()
     
     # Check for email verification FIRST (before other routing)
     try:
@@ -59,6 +112,12 @@ def show_landing_page():
             from authentication.auth import show_login_page
             show_login_page()
             return
+        
+        # Handle Auth0 callback
+        if 'code' in query_params and 'state' in query_params:
+            handle_auth0_callback_page(query_params)
+            return
+            
     except:
         pass
     
@@ -251,6 +310,43 @@ def show_landing_page():
         tab1, tab2, tab3 = st.tabs(["Login", "Create Account", "Forgot Password"])
         
         with tab1:
+            # Auth0 Login Option (if enabled)
+            if is_auth0_enabled():
+                st.markdown("### 🔐 Sign in with Auth0")
+                auth0_client = get_auth0_client()
+                
+                if auth0_client:
+                    # Generate state for CSRF protection
+                    if 'auth0_state' not in st.session_state:
+                        import secrets
+                        st.session_state.auth0_state = secrets.token_urlsafe(32)
+                    
+                    auth_url, _ = auth0_client.get_authorization_url(st.session_state.auth0_state)
+                    
+                    # Display Auth0 button
+                    st.markdown(f"""
+                        <a href="{auth_url}" target="_self" style="text-decoration: none;">
+                            <button style="
+                                background-color: #EB5424;
+                                color: white;
+                                padding: 12px 24px;
+                                border: none;
+                                border-radius: 5px;
+                                font-size: 16px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                width: 100%;
+                                transition: background-color 0.3s;
+                            " onmouseover="this.style.backgroundColor='#D64820'" 
+                               onmouseout="this.style.backgroundColor='#EB5424'">
+                                🔐 Sign in with Auth0
+                            </button>
+                        </a>
+                    """, unsafe_allow_html=True)
+                    
+                    st.markdown("<div style='text-align: center; margin: 1rem 0;'>— OR —</div>", unsafe_allow_html=True)
+            
+            # Traditional login form
             with st.form("login_form"):
                 username = st.text_input("Username", key="login_username")
                 password = st.text_input("Password", type="password", key="login_password")

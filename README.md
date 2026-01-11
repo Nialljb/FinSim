@@ -33,6 +33,23 @@ streamlit run wealth_simulator.py
 
 **That's it!** Open your browser to http://localhost:8501
 
+## 🔐 Authentication
+
+FinSim now supports **dual authentication** - choose between traditional username/password or Auth0 OAuth:
+
+### Auth0 Integration (Optional)
+- **One-click social login** (Google, Microsoft, Apple)
+- **Enhanced security** with MFA and breach detection
+- **Better UX** - no password to remember
+- **Enterprise-ready** - OAuth 2.0 / OpenID Connect
+
+**Setup Auth0:**
+1. See [AUTH0_SETUP_GUIDE.md](docs/AUTH0_SETUP_GUIDE.md) for complete setup
+2. Quick start: [AUTH0_QUICK_REFERENCE.md](docs/AUTH0_QUICK_REFERENCE.md)
+3. Implementation details: [AUTH0_IMPLEMENTATION_SUMMARY.md](AUTH0_IMPLEMENTATION_SUMMARY.md)
+
+Enable by setting `ENABLE_AUTH0=True` in your `.env` file. Both auth methods work simultaneously!
+
 ## ✨ Features
 
 ### Monte Carlo Simulation

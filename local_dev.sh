@@ -5,4 +5,4 @@ source venv/bin/activate
 
 pip install -r requirements.txt
 
-python -m streamlit run wealth_simulator.py
+python3 -m streamlit run wealth_simulator.py
