@@ -40,7 +40,7 @@ margin-bottom: 1rem;
     st.markdown("""
 <div class="section">
 <h2>1. Introduction</h2>
-<p>Welcome to FinSim. We take your privacy seriously. This Privacy Policy explains how we collect, 
+<p>Welcome to FinSTK. We take your privacy seriously. This Privacy Policy explains how we collect, 
 use, and protect your personal and financial information.</p>
 <p><strong>Key Principles:</strong></p>
 <ul>
@@ -107,7 +107,7 @@ use, and protect your personal and financial information.</p>
 <li>Manage your account</li>
 </ul>
         
-<h3>3.2 To Improve FinSim</h3>
+<h3>3.2 To Improve FinSTK</h3>
 <ul>
 <li>Analyze usage patterns (aggregated and/or anonymized, for legitimate business interests)</li>
 <li>Identify bugs and performance issues</li>
@@ -143,7 +143,7 @@ use, and protect your personal and financial information.</p>
 <li><strong>Database:</strong> PostgreSQL hosted on Render.com (US/EU regions)</li>
 <li><strong>Application:</strong> Render.com cloud infrastructure</li>
 <li><strong>Backups:</strong> Automated daily backups (7-day retention)</li>
-<li>The data controller for FinSim is Metacognition.ltd, located in London,England.</li>
+<li>The data controller for FinSTK is Metacognition.ltd, located in London,England.</li>
 </ul>
         
 <h3>4.2 Security Measures</h3>
@@ -219,7 +219,7 @@ use, and protect your personal and financial information.</p>
 <li><strong>View/Edit Data:</strong> Use the app interface</li>
 <li><strong>Export Data:</strong> Use the PDF/Excel export buttons</li>
 <li><strong>Delete Account:</strong> Contact us (see Contact page)</li>
-<li><strong>Questions:</strong> Email niall@finsim.com (placeholder)</li>
+<li><strong>Questions:</strong> Email niall@finstk.com (placeholder)</li>
 </ul>
 </div>
     """, unsafe_allow_html=True)
@@ -250,7 +250,7 @@ use, and protect your personal and financial information.</p>
     st.markdown("""
 <div class="section">
 <h2>8. Children's Privacy</h2>
-<p>FinSim is not intended for users under 18 years old. We do not knowingly collect 
+<p>FinSTK is not intended for users under 18 years old. We do not knowingly collect 
 information from children. If you are a parent and believe your child has created an 
 account, please contact us to have it deleted.</p>
 </div>
@@ -260,7 +260,7 @@ account, please contact us to have it deleted.</p>
     st.markdown("""
 <div class="section">
 <h2>9. International Users</h2>
-<p>FinSim is hosted in [US/EU - update based on your Render region]. If you access FinSim 
+<p>FinSTK is hosted in [US/EU - update based on your Render region]. If you access FinSTK 
 from outside this region, your data may be transferred to and stored in [US/EU].</p>
 <p><strong>GDPR Compliance (EU Users):</strong></p>
 <ul>
@@ -281,7 +281,7 @@ with an updated "Last Updated" date. Major changes will be communicated via:</p>
 <li>Email notification (if you provided an email)</li>
 <li>In-app notification on login</li>
 </ul>
-<p>Continued use of FinSim after changes constitutes acceptance of the new policy.</p>
+<p>Continued use of FinSTK after changes constitutes acceptance of the new policy.</p>
 </div>
     """, unsafe_allow_html=True)
 
@@ -291,7 +291,7 @@ with an updated "Last Updated" date. Major changes will be communicated via:</p>
 <h2>11. Contact Us</h2>
 <p>Questions about this Privacy Policy or your data?</p>
 <ul>
-<li><strong>Email:</strong> niall@finsim.com (placeholder - update with real contact)</li>
+<li><strong>Email:</strong> niall@finstk.com (placeholder - update with real contact)</li>
 <li><strong>Contact Form:</strong> <a href="?page=contact">Contact Page</a></li>
 </ul>
 </div>

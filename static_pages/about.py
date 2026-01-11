@@ -39,7 +39,7 @@ def show_about():
     <div class="content-section">
         <h2>📋 Our Mission</h2>
         <p style="font-size: 1.1rem;">
-            FinSim (Financial Simulator) was created to understand factors affecting your financial future and make financial planning tools accessible to everyone. 
+            FinSTK (Financial Simulator Toolkit) was created to understand factors affecting your financial future and make financial planning tools accessible to everyone. 
             We believe that understanding your financial future shouldn't require expensive software 
             or financial advisors for basic projections.
         </p>
@@ -50,7 +50,7 @@ def show_about():
     st.markdown("""
     <div class="content-section">
         <h2>🎯 What We Do</h2>
-        <p>FinSim uses <strong>Monte Carlo simulation</strong> to project thousands of possible financial 
+        <p>FinSTK uses <strong>Monte Carlo simulation</strong> to project thousands of possible financial 
         futures based on your current situation, goals, and planned life events. This gives you:</p>
         <ul>
             <li><strong>Realistic expectations:</strong> Not just one scenario, but a range of possibilities</li>
@@ -125,8 +125,8 @@ def show_about():
     # How It's Free
     st.markdown("""
     <div class="content-section">
-        <h2>💸 How is FinSim Free?</h2>
-        <p>FinSim is developed and maintained as a personal project. We keep costs low by:</p>
+        <h2>💸 How is FinSTK Free?</h2>
+        <p>FinSTK is developed and maintained as a personal project. We keep costs low by:</p>
         <ul>
             <li>Using efficient cloud infrastructure</li>
             <li>Collecting anonymized usage data for research (with your consent)</li>
@@ -142,7 +142,7 @@ def show_about():
     st.markdown("""
     <div class="content-section" style="border-left-color: #f44336;">
         <h2>⚠️ Important Disclaimer</h2>
-        <p><strong>FinSim is an educational tool only.</strong> It is NOT financial advice. Always consult 
+        <p><strong>FinSTK is an educational tool only.</strong> It is NOT financial advice. Always consult 
         with qualified financial advisors before making major financial decisions.</p>
         <p>Key limitations:</p>
         <ul>
@@ -158,7 +158,7 @@ def show_about():
     st.markdown("""
     <div class="content-section">
         <h2>📖 The Story</h2>
-        <p>FinSim started as a personal project to understand Monte Carlo simulations and their 
+        <p>FinSTK started as a personal project to understand Monte Carlo simulations and their 
         application to retirement planning. What began as a simple Python script evolved into 
         a comprehensive financial planning tool.</p>
         <p>Built with Python, Streamlit, and a lot of coffee ☕</p>

@@ -697,7 +697,7 @@ with tab1:
 
 
     # Title
-    st.title("30-Year Wealth Path Simulator")
+    st.title("Wealth Path Simulator")
     st.markdown("Interactive Monte Carlo simulation to explore your financial future")
     
     # Show loaded simulation indicator
@@ -2078,9 +2078,9 @@ with tab1:
 
     # Support/Donation Section
     st.sidebar.markdown("---")
-    st.sidebar.markdown("### 💝 Support FinSim")
+    st.sidebar.markdown("### 💝 Support FinSTK")
     st.sidebar.markdown("""
-        Love FinSim? Help keep it **free** and **ad-free** for everyone!
+        Love FinSTK? Help keep it **free** and **ad-free** for everyone!
         
         Your support helps us:
         - 🚀 Add new features
@@ -2097,7 +2097,7 @@ with tab1:
         </a>
     """, unsafe_allow_html=True)
     
-    st.sidebar.caption("💡 Every coffee helps us improve FinSim!")
+    st.sidebar.caption("💡 Every coffee helps us improve FinSTK!")
 
     # ============================================================================
     # DISPLAY RESULTS
