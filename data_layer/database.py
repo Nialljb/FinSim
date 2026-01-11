@@ -34,6 +34,9 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
     
+    # Auth0 integration
+    auth0_id = Column(String(255), unique=True, nullable=True, index=True)  # Auth0 user ID (sub)
+    
     # User profile data
     current_age = Column(Integer, nullable=True)
     target_retirement_age = Column(Integer, nullable=True)

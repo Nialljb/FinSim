@@ -10,6 +10,7 @@ python scripts/migrations/migrate_email_verification.py
 python db/migrations/add_preferred_currency.py
 python db/migrations/add_spouse_date_of_birth.py
 python db/migrations/add_debts_table.py
+python scripts/migrations/add_auth0_column.py
 
 echo "Modifying Streamlit to inject custom meta tags..."
 

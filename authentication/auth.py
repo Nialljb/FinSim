@@ -1,6 +1,7 @@
 """
 Authentication module for FinSim
 Handles user registration, login, email verification, and session management
+Supports both traditional username/password and Auth0 OAuth
 """
 
 import bcrypt
@@ -9,6 +10,12 @@ from datetime import datetime, timedelta
 from data_layer.database import SessionLocal, User, UsageStats, Feedback, EmailVerification
 import hashlib
 import secrets
+
+# Import settings
+try:
+    from config.settings import ENABLE_AUTH0
+except ImportError:
+    ENABLE_AUTH0 = False
 
 # Import from services directory
 try:
@@ -867,7 +874,48 @@ For bugs, feature requests, or public discussion, please visit our GitHub Issues
                                     st.rerun()
                                 else:
                                     st.error(result_msg)
-                        
-                        if cancel:
-                            st.session_state.show_feedback_modal = False
-                            st.rerun()
+
+
+# ============================================================================
+# Auth0 Integration Functions
+# ============================================================================
+
+def is_auth0_enabled():
+    """Check if Auth0 is enabled"""
+    return ENABLE_AUTH0
+
+
+def login_with_auth0(user_data: dict):
+    """
+    Login user using Auth0 authentication data
+    
+    Args:
+        user_data: User data dictionary from Auth0 callback
+    """
+    st.session_state.authenticated = True
+    st.session_state.user_id = user_data['id']
+    st.session_state.username = user_data['username']
+    st.session_state.user_email = user_data['email']
+    st.session_state.current_age = user_data.get('current_age')
+    st.session_state.target_retirement_age = user_data.get('target_retirement_age')
+    st.session_state.auth0_user = True
+    st.session_state.auth0_id = user_data.get('auth0_id')
+    
+    # Store Auth0 picture if available
+    if 'picture' in user_data:
+        st.session_state.user_picture = user_data['picture']
+    
+    create_session_token(user_data['id'])
+
+
+def get_auth0_client():
+    """Get Auth0 client instance"""
+    if not ENABLE_AUTH0:
+        return None
+    
+    try:
+        from authentication.auth0_integration import Auth0Client
+        return Auth0Client()
+    except Exception as e:
+        st.error(f"Auth0 configuration error: {e}")
+        return None
