@@ -161,9 +161,9 @@ def show_contact():
     faq_col1, faq_col2 = st.columns(2)
 
     with faq_col1:
-        with st.expander("💰 Is FinSim really free?"):
+        with st.expander("💰 Is FinSTK really free?"):
             st.write("""
-            Yes! FinSim is completely free for personal use with rate limits (10 simulations/month). 
+            Yes! FinSTK is completely free for personal use with rate limits (10 simulations/month). 
             There are no hidden fees, ads, or premium tiers currently.
             """)
         
@@ -180,20 +180,20 @@ def show_contact():
         
         with st.expander("🗑️ How do I delete my account?"):
             st.write("""
-            Email us at niall@finsim.com with your username and we'll permanently 
+            Email us at niall@finstk.com with your username and we'll permanently 
             delete your account and data within 30 days.
             """)
 
     with faq_col2:
         with st.expander("🌍 What currencies are supported?"):
             st.write("""
-            FinSim supports 15+ currencies including USD, CAD, EUR, GBP, JPY, AUD, NZD, CHF, SEK, 
+            FinSTK supports 15+ currencies including USD, CAD, EUR, GBP, JPY, AUD, NZD, CHF, SEK, 
             NOK, DKK, PLN, CZK, HUF, and ZAR.
             """)
         
         with st.expander("📱 Is there a mobile app?"):
             st.write("""
-            FinSim is a web app that works on mobile browsers. There's no dedicated mobile app yet, 
+            FinSTK is a web app that works on mobile browsers. There's no dedicated mobile app yet, 
             but the website is mobile-responsive.
             """)
         
@@ -203,12 +203,12 @@ def show_contact():
             the range of possible financial outcomes, not just one optimistic projection.
             """)
         
-        with st.expander("💼 Can I use FinSim for business?"):
+        with st.expander("💼 Can I use FinSTK for business?"):
             st.write("""
-            FinSim is designed for personal financial planning. Commercial use requires permission. 
-            Contact us at niall@finsim.com (placeholder) for licensing inquiries.
-            """)
-
+            FinSTK is designed for personal financial planning. Commercial use requires permission. 
+            Contact us at niall@finstk.com (placeholder) for licensing inquiries.
+            """
+)
     # Social Links (Placeholder)
     # <a href="https://github.com/Nialljb?tab=repositories" style="color: #667eea; text-decoration: none; margin: 0 1rem;">GitHub</a> • 
 
