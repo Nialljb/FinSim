@@ -1422,12 +1422,29 @@ with tab1:
                             st.write("")
                             st.write(f"**Household Total: £{primary_pension_income + spouse_pension_income:,.0f}**")
                         st.write(f"**Total:** £{state_pension + uss_pension + uss_avc_income + sipp_income:,.0f}")
+                else:
+                    # Manual pension income input when not using pension planner
+                    st.sidebar.info("💡 Or enter manual pension income below")
             else:
                 st.sidebar.info("💡 Set up pension in Pension Planner tab")
         finally:
             db.close()
     else:
         st.sidebar.info("💡 Log in to integrate pension data")
+    
+    # Manual pension income input (always available)
+    if not use_pension_data:
+        manual_pension = st.sidebar.number_input(
+            f"Annual Pension Income ({currency_symbol})",
+            min_value=0,
+            value=0,
+            step=1000,
+            key=f"manual_pension_income_{selected_currency}",
+            help="Total annual income from all pensions in retirement"
+        )
+        if manual_pension > 0:
+            total_pension_income = to_base_currency(manual_pension, selected_currency)
+            st.sidebar.success(f"✅ Pension: {format_currency(manual_pension, selected_currency)}/year")
     
     st.sidebar.markdown("---")
     
@@ -1689,7 +1706,8 @@ with tab1:
                             event_currency
                         ),
                         'mortgage_amount': mortgage_amount,
-                        'new_mortgage_payment': calculated_payment + new_payment
+                        'new_mortgage_payment': new_payment,
+                        'mortgage_years': details.get('mortgage_years', 25)
                     })
                 
                 elif event_type == 'property_sale':
@@ -1839,7 +1857,7 @@ with tab1:
                 )
                 
                 new_payment = calculate_mortgage_payment(mort_amount, mortgage_interest_rate, mort_years)
-                # Convert new_payment to base currency before adding to calculated_payment
+                # Convert new_payment to base currency
                 new_payment_base = to_base_currency(new_payment, selected_currency)
                 events.append({
                     'type': 'property_purchase',
@@ -1848,7 +1866,8 @@ with tab1:
                     'property_price': prop_price,
                     'down_payment': down_payment,
                     'mortgage_amount': mort_amount,
-                    'new_mortgage_payment': calculated_payment + new_payment_base
+                    'new_mortgage_payment': new_payment_base,
+                    'mortgage_years': mort_years
                 })
             
             elif event_type == "Property Sale":
@@ -2029,7 +2048,7 @@ with tab1:
                 random_seed=random_seed,
                 starting_age=starting_age,
                 retirement_age=retirement_age,
-                pension_income=total_pension_income if use_pension_data else 0,
+                pension_income=total_pension_income,  # Use pension income from either planner or manual input
                 passive_income_streams=passive_streams,
                 include_spouse=include_spouse,
                 spouse_age=spouse_age,
@@ -2044,6 +2063,7 @@ with tab1:
             st.session_state['simulation_years'] = simulation_years
             st.session_state['base_events'] = base_events
             st.session_state['monthly_mortgage_payment'] = calculated_payment
+            st.session_state['sim_pension_income'] = total_pension_income  # Save pension income for warning
             st.session_state['include_spouse'] = include_spouse
             if include_spouse:
                 st.session_state['spouse_age'] = spouse_age
@@ -2111,6 +2131,21 @@ with tab1:
         
         # Get number of simulations from results array
         n_simulations = results['net_worth'].shape[0] if 'net_worth' in results else 1000
+        
+        # Check if pension income was set for retirement
+        sim_pension_income = st.session_state.get('sim_pension_income', 0)
+        if sim_pension_income == 0 and retirement_age < (starting_age + simulation_years):
+            st.warning("⚠️ No pension income configured. In retirement, all expenses will be drawn from liquid wealth, which may deplete quickly. Set pension income in the sidebar under '🎯 Pension Income'.")
+        elif sim_pension_income > 0:
+            # Check pension pot sustainability
+            retirement_year = retirement_age - starting_age
+            if retirement_year < len(results['pension_wealth'][0]):
+                median_pension_at_retirement = np.median(results['pension_wealth'][:, retirement_year])
+                pension_in_display = from_base_currency(sim_pension_income, selected_currency)
+                pot_in_display = from_base_currency(median_pension_at_retirement, selected_currency)
+                years_sustainable = pot_in_display / pension_in_display if pension_in_display > 0 else 0
+                
+                st.info(f"💡 Pension at retirement: {format_currency(pot_in_display, selected_currency)} | Annual withdrawal: {format_currency(pension_in_display, selected_currency)} | Sustainable for ~{years_sustainable:.1f} years at 0% growth")
         
         display_results = convert_simulation_results_to_display(results, selected_currency)
         base_events = st.session_state.get('base_events', [])
@@ -2282,6 +2317,13 @@ with tab1:
         pension_contrib = gross_annual_income * pension_contribution_rate
         tax = gross_annual_income * effective_tax_rate
         take_home = gross_annual_income - pension_contrib - tax
+        
+        # Add spouse income to Year 1 calculations if applicable
+        if include_spouse and spouse_annual_income > 0:
+            spouse_pension = spouse_annual_income * pension_contribution_rate
+            spouse_tax = spouse_annual_income * effective_tax_rate
+            take_home += spouse_annual_income - spouse_pension - spouse_tax
+        
         annual_expenses_calc = monthly_expenses * 12
         annual_mortgage_calc = calculated_payment * 12
         annual_available_yr1 = take_home - annual_expenses_calc - annual_mortgage_calc
@@ -2340,6 +2382,10 @@ with tab1:
                 monthly_expenses=monthly_expenses,
                 monthly_mortgage=st.session_state.get('monthly_mortgage_payment', 0),
                 passive_income_annual=year1_passive_income,
+                include_spouse=include_spouse,
+                spouse_annual_income=spouse_annual_income if include_spouse else 0,
+                spouse_pension_rate=pension_contribution_rate,
+                spouse_tax_rate=effective_tax_rate,
                 currency_formatter=currency_formatter
             )
             
@@ -2353,9 +2399,19 @@ with tab1:
         with col2:
             st.markdown("**Key Metrics**")
             year1_income = gross_annual_income
-            year1_pension = year1_income * pension_contribution_rate
-            year1_tax = year1_income * effective_tax_rate
-            take_home = year1_income - year1_pension - year1_tax
+            if include_spouse and spouse_annual_income > 0:
+                year1_income += spouse_annual_income
+            year1_pension = gross_annual_income * pension_contribution_rate
+            year1_tax = gross_annual_income * effective_tax_rate
+            take_home = gross_annual_income - year1_pension - year1_tax
+            
+            # Add spouse take home if applicable
+            if include_spouse and spouse_annual_income > 0:
+                spouse_pension = spouse_annual_income * pension_contribution_rate
+                spouse_tax = spouse_annual_income * effective_tax_rate
+                take_home += spouse_annual_income - spouse_pension - spouse_tax
+                year1_pension += spouse_pension
+                year1_tax += spouse_tax
             
             st.metric(
                 "Year 1 Net Income",
@@ -2435,7 +2491,7 @@ with tab1:
         
         # Prepare spouse parameters
         spouse_params = None
-        if include_spouse and spouse_annual_income > 0:
+        if include_spouse:
             spouse_params = {
                 'gross_income': spouse_annual_income,
                 'retirement_age': spouse_retirement_age,
