@@ -185,17 +185,31 @@ def run_monte_carlo(initial_liquid_wealth, initial_property_value, initial_mortg
         year_available_savings = year_take_home + year_rental_income + year_passive_income_adjusted - year_expenses - year_mortgage_payment
         
         # Update pension wealth
-        # Only contribute to pension pre-retirement
         if not is_retired:
+            # Pre-retirement: accumulate contributions
             pension_wealth_paths[:, year] = (
                 pension_wealth_paths[:, year - 1] * (1 + pension_returns[:, year - 1]) +
                 year_pension_contribution
             )
         else:
-            # In retirement, pension pot still grows but no new contributions
-            pension_wealth_paths[:, year] = (
-                pension_wealth_paths[:, year - 1] * (1 + pension_returns[:, year - 1])
-            )
+            # Post-retirement: draw down pension income from the pot
+            if pension_income > 0:
+                # Calculate inflation-adjusted withdrawal amount
+                years_since_retirement = current_age - retirement_age
+                retirement_inflation = np.prod(1 + inflation_rates[:, retirement_age-starting_age:year], axis=1) if years_since_retirement > 0 else 1.0
+                pension_withdrawal = pension_income * retirement_inflation
+                
+                # Apply growth first to beginning balance
+                after_growth = pension_wealth_paths[:, year - 1] * (1 + pension_returns[:, year - 1])
+                
+                # Then withdraw (can't withdraw more than available after growth)
+                pension_withdrawal = np.minimum(pension_withdrawal, after_growth)
+                pension_wealth_paths[:, year] = after_growth - pension_withdrawal
+            else:
+                # No pension income configured, pot just grows
+                pension_wealth_paths[:, year] = (
+                    pension_wealth_paths[:, year - 1] * (1 + pension_returns[:, year - 1])
+                )
         
         # Update liquid wealth
         liquid_wealth_paths[:, year] = (
@@ -225,7 +239,11 @@ def run_monte_carlo(initial_liquid_wealth, initial_property_value, initial_mortg
                     liquid_wealth_paths[:, year] -= event['down_payment']
                     property_value_paths[:, year] += event['property_price']
                     mortgage_balance_paths[:, year] += event['mortgage_amount']
-                    monthly_mortgage_tracker[:, year:] = event['new_mortgage_payment']
+                    # Add new mortgage payment to existing payment (supports multiple properties)
+                    new_total_payment = current_monthly_mortgage + event['new_mortgage_payment']
+                    # Broadcast the new payment to all remaining years
+                    remaining_years = years + 1 - year
+                    monthly_mortgage_tracker[:, year:] = np.repeat(new_total_payment[:, np.newaxis], remaining_years, axis=1)
                     
                 elif event['type'] == 'property_sale':
                     net_proceeds = (event['sale_price'] - event['mortgage_payoff'] - event['selling_costs'])

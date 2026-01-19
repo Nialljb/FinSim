@@ -157,7 +157,8 @@ def apply_events_to_year(
             event_names.append(event.get('name', event.get('type', 'Event')))
             
             if event['type'] == 'property_purchase':
-                year_monthly_mortgage = event.get('new_mortgage_payment', 0)
+                # Add new mortgage payment to existing (supports multiple properties)
+                year_monthly_mortgage += event.get('new_mortgage_payment', 0)
             
             elif event['type'] == 'property_sale':
                 year_monthly_mortgage = 0
@@ -166,7 +167,7 @@ def apply_events_to_year(
                 year_monthly_expenses += event.get('monthly_change', 0)
             
             elif event['type'] == 'rental_income':
-                year_monthly_rental = event.get('monthly_rental', 0)
+                year_monthly_rental += event.get('monthly_rental', 0)
             
             # Windfall events don't affect monthly cash flow
     
@@ -396,6 +397,11 @@ def build_cashflow_projection(
     # Build projection
     cashflow_projection = []
     
+    # Track state across years
+    current_monthly_expenses = monthly_expenses
+    current_monthly_mortgage = monthly_mortgage_payment
+    current_monthly_rental = 0
+    
     for year in projection_years:
         # Calculate passive income for this year
         year_passive_income_annual = 0
@@ -404,10 +410,15 @@ def build_cashflow_projection(
                 year, passive_income_streams, effective_tax_rate
             )
         
-        # Apply events to this year
+        # Apply events to this year (using state from previous year)
         year_monthly_expenses, year_monthly_mortgage, year_monthly_rental, event_notes = apply_events_to_year(
-            year, events, monthly_expenses, monthly_mortgage_payment, 0
+            year, events, current_monthly_expenses, current_monthly_mortgage, current_monthly_rental
         )
+        
+        # Update state for next year
+        current_monthly_expenses = year_monthly_expenses
+        current_monthly_mortgage = year_monthly_mortgage
+        current_monthly_rental = year_monthly_rental
         
         # Calculate income for this year
         primary_income, spouse_income, is_retired, total_income, spouse_retired = calculate_year_income(
@@ -484,6 +495,10 @@ def create_year1_breakdown(
     monthly_expenses: float,
     monthly_mortgage: float,
     passive_income_annual: float = 0,
+    include_spouse: bool = False,
+    spouse_annual_income: float = 0,
+    spouse_pension_rate: float = 0,
+    spouse_tax_rate: float = 0,
     currency_formatter: Optional[Callable] = None
 ) -> tuple[pd.DataFrame, float, str]:
     """
@@ -503,6 +518,14 @@ def create_year1_breakdown(
         Monthly mortgage payment
     passive_income_annual : float, optional
         Annual passive income
+    include_spouse : bool, optional
+        Whether to include spouse income
+    spouse_annual_income : float, optional
+        Spouse gross annual income
+    spouse_pension_rate : float, optional
+        Spouse pension contribution rate
+    spouse_tax_rate : float, optional
+        Spouse tax rate
     currency_formatter : Callable, optional
         Function to format currency
     
@@ -530,10 +553,21 @@ def create_year1_breakdown(
     if currency_formatter is None:
         currency_formatter = lambda x: f"£{x:,.0f}"
     
-    # Calculate components
+    # Calculate primary income components
     pension_contrib = gross_annual_income * pension_contribution_rate
     tax = gross_annual_income * effective_tax_rate
     take_home = gross_annual_income - pension_contrib - tax
+    
+    # Calculate spouse income components if applicable
+    spouse_take_home = 0
+    if include_spouse and spouse_annual_income > 0:
+        spouse_pension = spouse_annual_income * spouse_pension_rate
+        spouse_tax = spouse_annual_income * spouse_tax_rate
+        spouse_take_home = spouse_annual_income - spouse_pension - spouse_tax
+    
+    # Total household income
+    total_take_home = take_home + spouse_take_home
+    
     annual_expenses = monthly_expenses * 12
     annual_mortgage = monthly_mortgage * 12
     
@@ -546,6 +580,18 @@ def create_year1_breakdown(
         currency_formatter(take_home)
     ]
     
+    # Add spouse income if applicable
+    if include_spouse and spouse_annual_income > 0:
+        spouse_pension = spouse_annual_income * spouse_pension_rate
+        spouse_tax = spouse_annual_income * spouse_tax_rate
+        items.extend(['+ Spouse Gross Income', '  - Spouse Pension', '  - Spouse Tax', '  = Spouse Take Home'])
+        amounts.extend([
+            currency_formatter(spouse_annual_income),
+            currency_formatter(spouse_pension),
+            currency_formatter(spouse_tax),
+            currency_formatter(spouse_take_home)
+        ])
+    
     # Add passive income if present
     if passive_income_annual > 0:
         items.append('+ Passive Income')
@@ -553,7 +599,7 @@ def create_year1_breakdown(
     
     # Add expenses and calculate available
     items.extend(['- Living Expenses', '- Mortgage', '= Available for Investment'])
-    available = take_home + passive_income_annual - annual_expenses - annual_mortgage
+    available = total_take_home + passive_income_annual - annual_expenses - annual_mortgage
     amounts.extend([
         currency_formatter(annual_expenses),
         currency_formatter(annual_mortgage),
